@@ -1,0 +1,8 @@
+.next
+node_modules
+package-lock.json
+next-env.d.ts
+# Componentes do shadcn: mantidos como o CLI gera, para atualizar sem conflito.
+src/components/ui
+# Gerado por npm run api:types
+src/lib/api-schema.d.ts
