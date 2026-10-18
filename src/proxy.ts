@@ -10,16 +10,22 @@ const apiOrigin = apiUrl.origin
  *
  * - script-src: só scripts com o nonce desta resposta ('strict-dynamic' propaga para os que eles carregarem).
  * - style-src 'unsafe-inline': o Base UI posiciona menus e popovers com atributos `style`, que um nonce não cobre.
- * - connect-src: o próprio site e a API.
+ * - connect-src: o próprio site, a API, o R2 (upload direto com URL assinada) e a OpenAI
+ *   (só o WebRTC do modo voz, com token efêmero).
+ * - img-src/media-src: imagens assinadas do R2 e áudio `blob:` da leitura em voz alta.
  */
+const R2 = "https://*.r2.cloudflarestorage.com"
+const OPENAI_REALTIME = "https://api.openai.com"
+
 export function buildCsp(nonce: string, isDev: boolean) {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${isDev ? " 'unsafe-eval'" : ""}`,
     "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' blob: data:",
+    `img-src 'self' blob: data: ${R2}`,
+    "media-src 'self' blob:",
     "font-src 'self'",
-    `connect-src 'self' ${apiOrigin}${isDev ? " ws:" : ""}`,
+    `connect-src 'self' ${apiOrigin} ${R2} ${OPENAI_REALTIME}${isDev ? " ws:" : ""}`,
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'",
@@ -47,7 +53,7 @@ export const config = {
   matcher: [
     {
       // Arquivos estáticos não precisam de CSP; prefetches reaproveitam a página já carregada.
-      source: "/((?!_next/static|_next/image|icon.svg|robots.txt).*)",
+      source: "/((?!_next/static|_next/image|icon.svg|robots.txt|manifest.webmanifest).*)",
       missing: [
         { type: "header", key: "next-router-prefetch" },
         { type: "header", key: "purpose", value: "prefetch" },

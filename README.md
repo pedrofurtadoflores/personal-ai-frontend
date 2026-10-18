@@ -3,6 +3,13 @@
 Interface do Personal AI: Next.js 16 (App Router) + Tailwind 4 + shadcn/ui (estilo base-nova, sobre Base UI).
 O plano e as decisões estão em `../plan.md`.
 
+## Telas
+
+- **Chat**: streaming, markdown (tabelas, código, LaTeX, Mermaid), anexos (arrastar, colar), busca web, geração de imagem, nível de raciocínio, seletor de modelo com preço, editar/regenerar com versões `< 2/3 >`, ditado, ler em voz alta, modo voz, chips de memória com "desfazer".
+- **Sinapses**: lista com busca e tags, editor markdown, versões com diff, conexões, origens, mesclar, dividir, sugestões e grafo.
+- **Arquivos** (enviados e imagens geradas), **Uso e custos** (gráficos), **Configurações** (modelos, memória, voz, limites, catálogo de preços, CORS do R2, backups, sessões), **Lixeira/Arquivadas**.
+- Busca global com **Ctrl+K**, nova conversa com **Ctrl+Shift+O**, instalável como app (PWA).
+
 ## Rodando localmente
 
 ```bash

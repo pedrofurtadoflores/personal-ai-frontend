@@ -1,50 +1,5 @@
 import { expect, type Page, test } from "@playwright/test"
-import { E2E_API_URL } from "../playwright.config"
-
-const SESSION_KEY = "personal-ai.session"
-const TOKEN = "token-de-teste"
-
-type MockOptions = { loginStatus?: number; retryAfter?: number; meStatus?: number }
-
-/** Simula a API e registra os headers Authorization recebidos. */
-async function mockApi(page: Page, options: MockOptions = {}) {
-  const { loginStatus = 200, retryAfter, meStatus = 200 } = options
-  const authHeaders: string[] = []
-
-  await page.route(`${E2E_API_URL}/**`, async (route) => {
-    const request = route.request()
-    const path = new URL(request.url()).pathname
-    const cors = {
-      "access-control-allow-origin": "*",
-      "access-control-allow-headers": "authorization, content-type",
-      "access-control-allow-methods": "GET, POST",
-      "access-control-expose-headers": "retry-after",
-    }
-    if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors })
-    const authorization = await request.headerValue("authorization")
-    if (authorization) authHeaders.push(authorization)
-
-    if (path === "/auth/login") {
-      if (loginStatus === 200) {
-        const expiresAt = new Date(Date.now() + 86_400_000).toISOString()
-        return route.fulfill({ status: 200, headers: cors, json: { token: TOKEN, expiresAt } })
-      }
-      return route.fulfill({
-        status: loginStatus,
-        headers: { ...cors, ...(retryAfter ? { "retry-after": String(retryAfter) } : {}) },
-        json: { error: loginStatus === 401 ? "invalid_password" : "rate_limited" },
-      })
-    }
-    if (path === "/auth/me") {
-      return meStatus === 200
-        ? route.fulfill({ status: 200, headers: cors, json: { authenticated: true } })
-        : route.fulfill({ status: meStatus, headers: cors, json: { error: "unauthorized" } })
-    }
-    return route.fulfill({ status: 404, headers: cors, json: { error: "not_found" } })
-  })
-
-  return { authHeaders }
-}
+import { mockApi, SESSION_KEY, TOKEN } from "./mock-api"
 
 /** Falha o teste se o CSP bloquear algo ou se a página lançar erro. */
 function watchErrors(page: Page) {
@@ -62,6 +17,10 @@ async function loginAs(page: Page, password = "senha") {
   await page.goto("/login")
   await page.getByLabel("Senha").fill(password)
   await page.getByRole("button", { name: "Entrar" }).click()
+}
+
+async function openMenuIfMobile(page: Page, isMobile: boolean) {
+  if (isMobile) await page.getByRole("button", { name: "Menu" }).click()
 }
 
 test("sem sessão, a área do app redireciona para o login", async ({ page }) => {
@@ -97,13 +56,78 @@ test("login abre o app, envia o token e o tema funciona sem violar o CSP", async
   await expect(page.getByText("Como posso ajudar?")).toBeVisible()
   expect(authHeaders).toContain(`Bearer ${TOKEN}`)
 
-  // Menu (celular) e dropdown de tema usam estilos inline do Base UI.
-  if (isMobile) await page.getByRole("button", { name: "Menu" }).click()
+  await openMenuIfMobile(page, isMobile)
   await page.getByRole("button", { name: "Tema" }).click()
   await page.getByRole("menuitemradio", { name: "Escuro" }).click()
   await expect(page.locator("html")).toHaveClass(/dark/)
-
   expect(problems).toEqual([])
+})
+
+test("chat: envia, recebe em streaming, mostra o chip de memória e regenera", async ({ page }) => {
+  const problems = watchErrors(page)
+  const { sent } = await mockApi(page)
+  await loginAs(page)
+
+  await page.getByLabel("Mensagem").fill("Oi, tudo bem?")
+  await page.getByRole("button", { name: "Enviar" }).click()
+
+  await expect(page).toHaveURL(/\/c\//)
+  await expect(page.getByText("Tudo certo")).toBeVisible()
+  await expect(page.locator("strong", { hasText: "Tudo certo" })).toBeVisible() // markdown renderizado
+  await expect(page.getByText("Sinapse atualizada:")).toBeVisible()
+  expect(sent[0]).toMatchObject({ text: "Oi, tudo bem?", parentId: null, model: "gpt-6-sol" })
+
+  await page.getByRole("button", { name: "Regenerar (cria uma nova versão)" }).click()
+  await expect(page.getByText("Segunda versão da resposta.")).toBeVisible()
+  await expect(page.getByText("2/2")).toBeVisible()
+
+  // Volta para a primeira versão.
+  await page.getByRole("button", { name: "Versão anterior" }).click()
+  await expect(page.getByText("Tudo certo")).toBeVisible()
+  expect(problems).toEqual([])
+})
+
+test("markdown da IA não executa HTML (D36)", async ({ page }) => {
+  const problems = watchErrors(page)
+  await mockApi(page)
+  await loginAs(page)
+  await page.evaluate(() => {
+    ;(window as unknown as { pwned: boolean }).pwned = false
+  })
+  await page.getByLabel("Mensagem").fill('<img src=x onerror="window.pwned=true">')
+  await page.getByRole("button", { name: "Enviar" }).click()
+  await expect(page.getByText("Tudo certo")).toBeVisible()
+  expect(await page.evaluate(() => (window as unknown as { pwned: boolean }).pwned)).toBe(false)
+  expect(problems).toEqual([])
+})
+
+test("todas as telas abrem sem erro nem violação de CSP", async ({ page }) => {
+  const problems = watchErrors(page)
+  await mockApi(page)
+  await loginAs(page)
+  await expect(page.getByText("Como posso ajudar?")).toBeVisible()
+  for (const [path, heading] of [
+    ["/sinapses", "Sinapses"],
+    ["/sinapses/sugestoes", "Sugestões de memória"],
+    ["/sinapses/grafo", "Grafo de sinapses"],
+    ["/arquivos", "Arquivos"],
+    ["/uso", "Uso e custos"],
+    ["/configuracoes", "Configurações"],
+    ["/lixeira", "Lixeira"],
+  ] as const) {
+    await page.goto(path)
+    await expect(page.getByRole("heading", { name: heading, exact: true })).toBeVisible()
+  }
+  expect(problems).toEqual([])
+})
+
+test("busca abre com Ctrl+K", async ({ page, isMobile }) => {
+  test.skip(isMobile, "atalho de teclado")
+  await mockApi(page)
+  await loginAs(page)
+  await expect(page.getByText("Como posso ajudar?")).toBeVisible()
+  await page.keyboard.press("Control+k")
+  await expect(page.getByPlaceholder("Buscar conversas e sinapses…")).toBeVisible()
 })
 
 test("sessão revogada no servidor volta para o login", async ({ page }) => {
@@ -126,12 +150,12 @@ test("sair encerra a sessão", async ({ page, isMobile }) => {
   await mockApi(page)
   await loginAs(page)
   await expect(page.getByText("Como posso ajudar?")).toBeVisible()
-  if (isMobile) await page.getByRole("button", { name: "Menu" }).click()
+  await openMenuIfMobile(page, isMobile)
   await page.getByRole("button", { name: "Sair" }).click()
   await expect(page).toHaveURL(/\/login$/)
 })
 
-test("headers de segurança e noindex", async ({ request }) => {
+test("headers de segurança, noindex e manifesto PWA", async ({ request }) => {
   const response = await request.get("/login")
   const headers = response.headers()
   expect(headers["content-security-policy"]).toMatch(
@@ -141,4 +165,5 @@ test("headers de segurança e noindex", async ({ request }) => {
   expect(headers["x-frame-options"]).toBe("DENY")
   expect(headers["x-robots-tag"]).toBe("noindex, nofollow")
   expect(await (await request.get("/robots.txt")).text()).toContain("Disallow: /")
+  expect((await (await request.get("/manifest.webmanifest")).json()).name).toBe("Personal AI")
 })

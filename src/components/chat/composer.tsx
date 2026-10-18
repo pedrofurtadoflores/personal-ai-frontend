@@ -1,0 +1,379 @@
+"use client"
+
+import {
+  ArrowUpIcon,
+  BrainIcon,
+  FileIcon,
+  GlobeIcon,
+  ImageIcon,
+  Loader2Icon,
+  MicIcon,
+  PaperclipIcon,
+  SquareIcon,
+  XIcon,
+} from "lucide-react"
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react"
+import { toast } from "sonner"
+import { ModelPicker } from "@/components/chat/model-picker"
+import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { Toggle } from "@/components/ui/toggle"
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
+import { ApiError } from "@/lib/api"
+import { startRecording, transcribe } from "@/lib/audio"
+import type { FileItem } from "@/lib/types"
+import { uploadErrorText, uploadFile } from "@/lib/upload"
+import { cn } from "@/lib/utils"
+
+export type ComposerOptions = {
+  model: string
+  reasoningEffort: string
+  webSearch: boolean
+  imageGeneration: boolean
+}
+
+export type ComposerSubmit = { text: string; files: FileItem[] }
+
+type Pending = {
+  key: string
+  name: string
+  progress: number
+  file?: FileItem
+  error?: string
+  preview?: string
+}
+
+const efforts = [
+  ["auto", "Automático"],
+  ["none", "Sem raciocínio"],
+  ["low", "Baixo"],
+  ["medium", "Médio"],
+  ["high", "Alto"],
+  ["xhigh", "Máximo"],
+] as const
+
+export type ComposerHandle = {
+  addFiles: (files: File[]) => void
+  focus: () => void
+  setText: (text: string) => void
+}
+
+export const Composer = forwardRef<
+  ComposerHandle,
+  {
+    conversationId: string | null
+    options: ComposerOptions
+    onOptionsChange: (options: Partial<ComposerOptions>) => void
+    onSubmit: (input: ComposerSubmit) => void
+    onStop: () => void
+    streaming: boolean
+    disabled?: boolean
+    autoFocus?: boolean
+    extraActions?: React.ReactNode
+  }
+>(function Composer(props, ref) {
+  const { options, onOptionsChange, streaming } = props
+  const [text, setText] = useState("")
+  const [pending, setPending] = useState<Pending[]>([])
+  const [recording, setRecording] = useState<null | "recording" | "transcribing">(null)
+  const recorder = useRef<Awaited<ReturnType<typeof startRecording>> | null>(null)
+  const textarea = useRef<HTMLTextAreaElement>(null)
+
+  // Altura automática até ~10 linhas.
+  useEffect(() => {
+    const element = textarea.current
+    if (!element) return
+    element.style.height = "auto"
+    element.style.height = `${Math.min(element.scrollHeight, 260)}px`
+  }, [text])
+
+  const addFiles = useCallback(
+    (files: File[]) => {
+      for (const file of files) {
+        const key = `${file.name}-${file.size}-${Math.random()}`
+        const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : undefined
+        setPending((list) => [...list, { key, name: file.name, progress: 0, preview }])
+        uploadFile(file, {
+          conversationId: props.conversationId,
+          onProgress: (progress) =>
+            setPending((list) =>
+              list.map((item) => (item.key === key ? { ...item, progress } : item)),
+            ),
+        })
+          .then((uploaded) =>
+            setPending((list) =>
+              list.map((item) =>
+                item.key === key ? { ...item, progress: 1, file: uploaded } : item,
+              ),
+            ),
+          )
+          .catch((error: unknown) => {
+            const code = error instanceof ApiError ? error.code : ""
+            const message = uploadErrorText[code] ?? "Não foi possível enviar o arquivo."
+            toast.error(`${file.name}: ${message}`)
+            setPending((list) =>
+              list.map((item) => (item.key === key ? { ...item, error: message } : item)),
+            )
+          })
+      }
+    },
+    [props.conversationId],
+  )
+
+  useImperativeHandle(ref, () => ({
+    addFiles,
+    focus: () => textarea.current?.focus(),
+    setText: (value) => setText(value),
+  }))
+
+  const uploading = pending.some((item) => !item.file && !item.error)
+  const ready = pending.filter((item) => item.file).map((item) => item.file!)
+  const canSend =
+    !streaming && !uploading && !props.disabled && (text.trim().length > 0 || ready.length > 0)
+
+  function submit() {
+    if (!canSend) return
+    props.onSubmit({ text: text.trim(), files: ready })
+    setText("")
+    pending.forEach((item) => item.preview && URL.revokeObjectURL(item.preview))
+    setPending([])
+  }
+
+  async function toggleRecording() {
+    if (recording === "recording") {
+      setRecording("transcribing")
+      try {
+        const audio = await recorder.current!.stop()
+        const transcript = await transcribe(audio)
+        setText((current) => (current ? `${current} ${transcript}` : transcript))
+        textarea.current?.focus()
+      } catch {
+        toast.error("Não foi possível transcrever o áudio.")
+      } finally {
+        recorder.current = null
+        setRecording(null)
+      }
+      return
+    }
+    try {
+      recorder.current = await startRecording()
+      setRecording("recording")
+    } catch {
+      toast.error("Sem acesso ao microfone.")
+    }
+  }
+
+  return (
+    <div className="rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
+      {pending.length > 0 && (
+        <div className="flex flex-wrap gap-2 border-b p-2">
+          {pending.map((item) => (
+            <div
+              key={item.key}
+              className={cn(
+                "relative flex items-center gap-2 rounded-lg border bg-muted/40 py-1 pr-7 pl-1 text-xs",
+                item.error && "border-destructive/50 text-destructive",
+              )}
+            >
+              {item.preview ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={item.preview} alt="" className="size-8 rounded object-cover" />
+              ) : (
+                <FileIcon className="ml-1 size-4" />
+              )}
+              <span className="max-w-40 truncate">{item.name}</span>
+              {!item.file && !item.error && (
+                <span className="text-muted-foreground tabular-nums">
+                  {Math.round(item.progress * 100)}%
+                </span>
+              )}
+              <button
+                type="button"
+                aria-label={`Remover ${item.name}`}
+                className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 hover:bg-muted"
+                onClick={() => setPending((list) => list.filter((other) => other.key !== item.key))}
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <textarea
+        ref={textarea}
+        value={text}
+        autoFocus={props.autoFocus}
+        rows={1}
+        placeholder={
+          recording === "recording"
+            ? "Ouvindo… clique no microfone para terminar"
+            : "Pergunte qualquer coisa"
+        }
+        aria-label="Mensagem"
+        className="block max-h-64 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base outline-none placeholder:text-muted-foreground md:text-sm"
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault()
+            submit()
+          }
+          if (event.key === "Escape" && streaming) props.onStop()
+        }}
+        onPaste={(event) => {
+          const files = [...event.clipboardData.files]
+          if (files.length) {
+            event.preventDefault()
+            addFiles(files)
+          }
+        }}
+      />
+
+      <div className="flex flex-wrap items-center gap-1 px-2 pb-2">
+        <label className="contents">
+          <input
+            type="file"
+            multiple
+            className="sr-only"
+            onChange={(event) => {
+              addFiles([...(event.target.files ?? [])])
+              event.target.value = ""
+            }}
+          />
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <span
+                  className={cn(
+                    "inline-flex size-8 cursor-pointer items-center justify-center rounded-lg hover:bg-muted",
+                  )}
+                />
+              }
+            >
+              <PaperclipIcon className="size-4" />
+              <span className="sr-only">Anexar arquivo</span>
+            </TooltipTrigger>
+            <TooltipContent>Anexar (ou arraste / cole)</TooltipContent>
+          </Tooltip>
+        </label>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Toggle
+                size="sm"
+                pressed={options.webSearch}
+                onPressedChange={(webSearch) => onOptionsChange({ webSearch })}
+                aria-label="Busca na web"
+              />
+            }
+          >
+            <GlobeIcon />
+          </TooltipTrigger>
+          <TooltipContent>Busca na web</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Toggle
+                size="sm"
+                pressed={options.imageGeneration}
+                onPressedChange={(imageGeneration) => onOptionsChange({ imageGeneration })}
+                aria-label="Gerar imagens"
+              />
+            }
+          >
+            <ImageIcon />
+          </TooltipTrigger>
+          <TooltipContent>Gerar imagens</TooltipContent>
+        </Tooltip>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                className="gap-1 font-normal"
+                aria-label="Nível de raciocínio"
+              />
+            }
+          >
+            <BrainIcon className="size-3.5" />
+            <span className="hidden sm:inline">
+              {efforts.find(([value]) => value === options.reasoningEffort)?.[1] ?? "Automático"}
+            </span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Raciocínio</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={options.reasoningEffort}
+              onValueChange={(reasoningEffort) => onOptionsChange({ reasoningEffort })}
+            >
+              {efforts.map(([value, label]) => (
+                <DropdownMenuRadioItem key={value} value={value}>
+                  {label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <ModelPicker value={options.model} onChange={(model) => onOptionsChange({ model })} />
+
+        <div className="ml-auto flex items-center gap-1">
+          {props.extraActions}
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  variant={recording === "recording" ? "destructive" : "ghost"}
+                  size="icon"
+                  aria-label={recording === "recording" ? "Parar ditado" : "Ditar"}
+                  disabled={recording === "transcribing"}
+                  onClick={toggleRecording}
+                />
+              }
+            >
+              {recording === "transcribing" ? (
+                <Loader2Icon className="animate-spin" />
+              ) : (
+                <MicIcon />
+              )}
+            </TooltipTrigger>
+            <TooltipContent>Ditar</TooltipContent>
+          </Tooltip>
+
+          {streaming ? (
+            <Button
+              size="icon"
+              className="rounded-full"
+              aria-label="Parar resposta"
+              onClick={props.onStop}
+            >
+              <SquareIcon className="fill-current" />
+            </Button>
+          ) : (
+            <Button
+              size="icon"
+              className="rounded-full"
+              aria-label="Enviar"
+              disabled={!canSend}
+              onClick={submit}
+            >
+              {uploading ? <Loader2Icon className="animate-spin" /> : <ArrowUpIcon />}
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+})

@@ -1,20 +1,26 @@
 "use client"
 
 import {
+  ArchiveIcon,
   BarChart3Icon,
   BrainCircuitIcon,
   FolderIcon,
   LogOutIcon,
   MessageSquarePlusIcon,
+  SearchIcon,
   SettingsIcon,
+  Trash2Icon,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { ConversationList } from "@/components/layout/conversation-list"
 import { ThemeToggle } from "@/components/layout/theme-toggle"
 import { Button } from "@/components/ui/button"
+import { Kbd } from "@/components/ui/kbd"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { auth } from "@/lib/auth"
+import { useSinapses } from "@/lib/queries"
 import { cn } from "@/lib/utils"
 
 const navItems = [
@@ -29,9 +35,17 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`)
 }
 
-export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
+export function AppSidebar({
+  onNavigate,
+  onSearch,
+}: {
+  onNavigate?: () => void
+  onSearch: () => void
+}) {
   const pathname = usePathname()
   const onNewChat = pathname === "/"
+  const sinapses = useSinapses()
+  const pending = sinapses.data?.pendingSuggestions ?? 0
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
@@ -40,7 +54,7 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
         <span className="font-semibold">Personal AI</span>
       </div>
 
-      <div className="px-3">
+      <div className="flex flex-col gap-1 px-3">
         <Button
           variant={onNewChat ? "secondary" : "outline"}
           className="w-full justify-start"
@@ -51,11 +65,18 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
         >
           <MessageSquarePlusIcon /> Nova conversa
         </Button>
+        <Button
+          variant="ghost"
+          className="w-full justify-start text-muted-foreground"
+          onClick={onSearch}
+        >
+          <SearchIcon /> Buscar
+          <Kbd className="ml-auto">Ctrl K</Kbd>
+        </Button>
       </div>
 
-      <ScrollArea className="min-h-0 flex-1 px-3 py-3">
-        {/* Lista de conversas entra na Fase 2. */}
-        <p className="px-2 text-xs text-muted-foreground">Nenhuma conversa ainda.</p>
+      <ScrollArea className="min-h-0 flex-1 px-2 py-1">
+        <ConversationList onNavigate={onNavigate} />
       </ScrollArea>
 
       <Separator />
@@ -75,6 +96,14 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
               )}
             >
               <Icon className="size-4" /> {label}
+              {href === "/sinapses" && pending > 0 && (
+                <span
+                  className="ml-auto rounded-full bg-primary px-1.5 text-xs text-primary-foreground"
+                  title="Sugestões pendentes"
+                >
+                  {pending}
+                </span>
+              )}
             </Link>
           )
         })}
@@ -82,11 +111,31 @@ export function AppSidebar({ onNavigate }: { onNavigate?: () => void }) {
 
       <Separator />
 
-      <div className="flex items-center justify-between p-3">
+      <div className="flex items-center gap-1 p-3">
         <Button variant="ghost" size="sm" onClick={() => auth.clear()}>
           <LogOutIcon /> Sair
         </Button>
-        <ThemeToggle />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Arquivadas"
+          nativeButton={false}
+          render={<Link href="/lixeira?view=archived" onClick={onNavigate} />}
+        >
+          <ArchiveIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          aria-label="Lixeira"
+          nativeButton={false}
+          render={<Link href="/lixeira" onClick={onNavigate} />}
+        >
+          <Trash2Icon />
+        </Button>
+        <div className="ml-auto">
+          <ThemeToggle />
+        </div>
       </div>
     </div>
   )

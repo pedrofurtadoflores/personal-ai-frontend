@@ -1,13 +1,5 @@
-import { MessageSquareIcon } from "lucide-react"
-import { ComingSoon } from "@/components/layout/coming-soon"
+import { ChatView } from "@/components/chat/chat-view"
 
 export default function NewChatPage() {
-  return (
-    <ComingSoon
-      icon={MessageSquareIcon}
-      title="Como posso ajudar?"
-      description="O chat com streaming, histórico completo e seleção de modelos chega na próxima etapa."
-      phase="Fase 2"
-    />
-  )
+  return <ChatView conversationId={null} />
 }
