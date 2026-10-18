@@ -15,13 +15,16 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const token = useToken()
   const [mobileOpen, setMobileOpen] = useState(false)
 
-  // Confirma com o servidor que o token ainda vale (senha trocada, logout-all, segredo novo).
+  // Confirma com o servidor que o token ainda vale (senha trocada, logout-all, segredo novo):
+  // ao abrir, ao voltar para a aba (depois de 1 min) e a cada 5 min.
   // Se não valer, o cliente da API limpa a sessão e o efeito abaixo redireciona.
   const session = useQuery({
     queryKey: ["auth", "me", token],
     queryFn: () => unwrap(api.GET("/auth/me")),
     enabled: !!token,
-    staleTime: Infinity,
+    staleTime: 60_000,
+    refetchInterval: 5 * 60_000,
+    refetchOnWindowFocus: true,
   })
 
   useEffect(() => {

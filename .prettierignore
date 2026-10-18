@@ -6,3 +6,5 @@ next-env.d.ts
 src/components/ui
 # Gerado por npm run api:types
 src/lib/api-schema.d.ts
+test-results
+playwright-report

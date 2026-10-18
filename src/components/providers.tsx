@@ -22,7 +22,7 @@ function createQueryClient() {
   })
 }
 
-export function Providers({ children }: { children: React.ReactNode }) {
+export function Providers({ children, nonce }: { children: React.ReactNode; nonce?: string }) {
   const [queryClient] = useState(createQueryClient)
 
   // Ao sair, descarta todo o cache para não mostrar dados da sessão anterior.
@@ -35,7 +35,14 @@ export function Providers({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    // O next-themes injeta um script inline para evitar o "flash" de tema: precisa do nonce do CSP.
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="system"
+      enableSystem
+      disableTransitionOnChange
+      nonce={nonce}
+    >
       <QueryClientProvider client={queryClient}>
         <TooltipProvider>
           {children}

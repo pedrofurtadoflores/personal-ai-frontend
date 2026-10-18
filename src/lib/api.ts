@@ -1,16 +1,16 @@
 import createClient from "openapi-fetch"
+import { resolveApiUrl } from "@/config/api-url"
 import type { paths } from "@/lib/api-schema"
 import { auth } from "@/lib/auth"
 
-/** Em produção a URL é obrigatória (o next.config.ts falha o build sem ela). */
-export const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ??
-  (process.env.NODE_ENV === "production" ? "" : "http://localhost:3333")
+export const API_URL = resolveApiUrl()
 
 export class ApiError extends Error {
   constructor(
     public status: number,
     public code: string,
+    /** Segundos até poder tentar de novo (header Retry-After), quando o servidor informa. */
+    public retryAfter?: number,
   ) {
     super(code)
   }
@@ -56,7 +56,8 @@ export async function unwrap<T>(promise: Promise<Result<T>>): Promise<T> {
       error && typeof error === "object" && "error" in error && typeof error.error === "string"
         ? error.error
         : "request_failed"
-    throw new ApiError(response.status, code)
+    const retryAfter = Number(response.headers.get("retry-after")) || undefined
+    throw new ApiError(response.status, code, retryAfter)
   }
   return data as T
 }

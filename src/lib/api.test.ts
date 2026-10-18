@@ -4,12 +4,15 @@ import { auth } from "@/lib/auth"
 
 const future = () => new Date(Date.now() + 60_000).toISOString()
 
-function mockFetch(status: number, body?: unknown) {
+function mockFetch(status: number, body?: unknown, extraHeaders: Record<string, string> = {}) {
   const fetchMock = vi.fn<(request: Request) => Promise<Response>>(
     async () =>
       new Response(body === undefined ? null : JSON.stringify(body), {
         status,
-        headers: body === undefined ? {} : { "content-type": "application/json" },
+        headers: {
+          ...(body === undefined ? {} : { "content-type": "application/json" }),
+          ...extraHeaders,
+        },
       }),
   )
   vi.stubGlobal("fetch", fetchMock)
@@ -45,6 +48,12 @@ describe("api", () => {
     const error = await login("x").catch((e) => e)
     expect(error).toBeInstanceOf(ApiError)
     expect(error.code).toBe("invalid_password")
+  })
+
+  it("429 traz o tempo de espera do header Retry-After", async () => {
+    mockFetch(429, { error: "rate_limited" }, { "retry-after": "240" })
+    const error = await login("x").catch((e) => e)
+    expect(error).toMatchObject({ status: 429, code: "rate_limited", retryAfter: 240 })
   })
 
   it("aceita 204 sem corpo", async () => {

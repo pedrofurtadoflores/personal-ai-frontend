@@ -17,6 +17,23 @@ const errorMessages: Record<string, string> = {
   network_error: "Não foi possível conectar ao servidor.",
 }
 
+function formatWait(seconds: number) {
+  if (seconds < 60) return `${seconds} s`
+  const minutes = Math.ceil(seconds / 60)
+  if (minutes < 60) return `${minutes} min`
+  return `${Math.ceil(minutes / 60)} h`
+}
+
+function messageFor(error: unknown) {
+  if (!(error instanceof ApiError)) return "Algo deu errado. Tente de novo."
+  if (error.status === 429) {
+    return error.retryAfter
+      ? `Muitas tentativas. Tente de novo em ${formatWait(error.retryAfter)}.`
+      : errorMessages.rate_limited!
+  }
+  return errorMessages[error.code] ?? "Algo deu errado. Tente de novo."
+}
+
 export default function LoginPage() {
   const router = useRouter()
   const token = useToken()
@@ -35,8 +52,7 @@ export default function LoginPage() {
     try {
       auth.setSession(await login(password))
     } catch (err) {
-      const code = err instanceof ApiError ? (err.status === 429 ? "rate_limited" : err.code) : ""
-      setError(errorMessages[code] ?? "Algo deu errado. Tente de novo.")
+      setError(messageFor(err))
     } finally {
       setLoading(false)
     }
