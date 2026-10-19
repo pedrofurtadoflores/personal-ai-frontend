@@ -12,6 +12,8 @@ function mimeOf(file: File) {
     csv: "text/csv",
     json: "application/json",
     txt: "text/plain",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    xls: "application/vnd.ms-excel",
   }
   return byExt[ext ?? ""] ?? "application/octet-stream"
 }
@@ -24,14 +26,26 @@ export async function uploadFile(
   file: File,
   {
     conversationId,
+    folderId,
     onProgress,
-  }: { conversationId?: string | null; onProgress?: (ratio: number) => void } = {},
+  }: {
+    conversationId?: string | null
+    /** Arquivo de projeto (D73): entra no RAG de todas as conversas do projeto. */
+    folderId?: string | null
+    onProgress?: (ratio: number) => void
+  } = {},
 ): Promise<FileItem> {
   if (file.size > MAX_BYTES) throw new ApiError(413, "payload_too_large")
   const mime = mimeOf(file)
   const { file: created, uploadUrl } = await unwrap(
     api.POST("/files", {
-      body: { name: file.name, mime, size: file.size, conversationId: conversationId ?? null },
+      body: {
+        name: file.name,
+        mime,
+        size: file.size,
+        conversationId: conversationId ?? null,
+        folderId: folderId ?? null,
+      },
     }),
   )
 
@@ -53,7 +67,8 @@ export async function uploadFile(
 
 export const uploadErrorText: Record<string, string> = {
   payload_too_large: "O limite é de 50 MB por arquivo.",
-  unsupported_media_type: "Tipo de arquivo não suportado (use imagem, PDF, DOCX ou texto).",
+  unsupported_media_type:
+    "Tipo de arquivo não suportado (use imagem, PDF, DOCX, planilha ou texto).",
   upload_blocked: "O envio para o armazenamento foi bloqueado (confira o CORS do bucket R2).",
   upload_failed: "O armazenamento recusou o arquivo.",
   storage_not_configured: "O armazenamento (R2) não está configurado no backend.",

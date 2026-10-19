@@ -10,6 +10,8 @@ export type MockOptions = {
   meStatus?: number
   /** Atraso do POST /conversations, para testar o que acontece enquanto a conversa é criada. */
   createDelayMs?: number
+  /** A primeira resposta cai no meio (sem `done`); o GET /stream entrega tudo (D68). */
+  dropFirstStream?: boolean
 }
 
 const now = () => new Date().toISOString()
@@ -33,6 +35,12 @@ const settings = {
   monthlyLimitUsd: 50,
   alertThreshold: 0.8,
   webSearchUsdPerCall: 0.01,
+  codeInterpreterUsdPerContainer: 0.03,
+  contextBudgetTokens: 60_000,
+  savedPrompts: [
+    { name: "resumir", text: "Resuma o texto abaixo em tópicos curtos:" },
+    { name: "traduzir", text: "Traduza o texto abaixo para o inglês:" },
+  ],
 }
 
 const models = [
@@ -85,6 +93,9 @@ function message(
     tokensOut: null,
     tokensReasoning: null,
     costUsd: null,
+    rating: null,
+    feedbackNote: null,
+    contextTokens: null,
     createdAt: now(),
     completedAt: now(),
     ...partial,
@@ -99,9 +110,19 @@ const sse = (events: [string, unknown][]) =>
  * Registra os headers Authorization recebidos e os corpos enviados ao chat.
  */
 export async function mockApi(page: Page, options: MockOptions = {}) {
-  const { loginStatus = 200, retryAfter, meStatus = 200, createDelayMs = 0 } = options
+  const {
+    loginStatus = 200,
+    retryAfter,
+    meStatus = 200,
+    createDelayMs = 0,
+    dropFirstStream = false,
+  } = options
   const authHeaders: string[] = []
   const sent: Record<string, unknown>[] = []
+  const feedback: Record<string, unknown>[] = []
+  /** Eventos completos da última resposta, para o GET /stream (reconexão). */
+  const pendingReplay = new Map<string, [string, unknown][]>()
+  let dropped = false
   let counter = 1
   const conversations = new Map<
     string,
@@ -141,6 +162,11 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === "/settings") return json({ settings, voices: ["alloy", "marin"] })
     if (path === "/models") return json({ models, pricesSource: "teste" })
     if (path === "/folders") return json({ folders: [] })
+    if (path === "/chat/suggestions")
+      return json({
+        suggestions: ["Retomar a receita de pão", "Planejar a semana de treinos"],
+        personalized: true,
+      })
     if (path === "/usage")
       return json({
         days: [],
@@ -195,6 +221,8 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
         sent.push(body)
         const conversationId = match[1]!
         const regenerating = rest.endsWith("/regenerate")
+        const dropThis = dropFirstStream && !dropped
+        dropped = true
         const parent = regenerating
           ? (data.messages.find((item) => item.id === rest.split("/")[2])?.parentId ?? null)
           : null
@@ -231,22 +259,45 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
           contentText: text,
           model: "gpt-6-sol",
           costUsd: 0.0012,
+          contextTokens: 1_200,
         }
         if (user) data.messages.push(user)
         data.messages.push(done)
         data.conversation.currentLeafMessageId = done.id
+        const events: [string, unknown][] = [
+          ["start", { ...(user ? { userMessage: user } : {}), assistantMessage: assistant }],
+          ...text.match(/.{1,6}/g)!.map((delta) => ["delta", { text: delta }] as [string, unknown]),
+          ["part", chip],
+          ["done", { message: done }],
+        ]
+        if (dropThis) {
+          // Conexão cai antes do fim; o servidor continua e entrega tudo na reconexão.
+          pendingReplay.set(conversationId, events)
+        }
         return route.fulfill({
           status: 200,
           headers: { ...cors, "content-type": "text/event-stream" },
-          body: sse([
-            ["start", { ...(user ? { userMessage: user } : {}), assistantMessage: assistant }],
-            ...text
-              .match(/.{1,6}/g)!
-              .map((delta) => ["delta", { text: delta }] as [string, unknown]),
-            ["part", chip],
-            ["done", { message: done }],
-          ]),
+          body: sse(dropThis ? events.slice(0, 3) : events),
         })
+      }
+      if (rest === "/stream") {
+        const replay = pendingReplay.get(match[1]!)
+        if (!replay) return route.fulfill({ status: 204, headers: cors })
+        pendingReplay.delete(match[1]!)
+        return route.fulfill({
+          status: 200,
+          headers: { ...cors, "content-type": "text/event-stream" },
+          body: sse(replay),
+        })
+      }
+      if (rest === "/stop") return json({ stopped: false })
+      const feedbackMatch = rest.match(/^\/messages\/([^/]+)\/feedback$/)
+      if (feedbackMatch && method === "PUT") {
+        const body = request.postDataJSON() as { rating: string | null; note?: string }
+        feedback.push(body)
+        const target = data.messages.find((item) => item.id === feedbackMatch[1])!
+        Object.assign(target, { rating: body.rating, feedbackNote: body.note ?? null })
+        return json(target)
       }
       if (rest === "/leaf") {
         const body = request.postDataJSON() as { messageId: string }
@@ -257,5 +308,5 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     return json({ error: "not_found" }, 404)
   })
 
-  return { authHeaders, sent, conversations }
+  return { authHeaders, sent, conversations, feedback }
 }

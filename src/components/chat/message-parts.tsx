@@ -2,8 +2,11 @@
 
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
+  BookOpenIcon,
   BrainCircuitIcon,
   CheckIcon,
+  ChevronRightIcon,
+  FoldVerticalIcon,
   FileTextIcon,
   GlobeIcon,
   LightbulbIcon,
@@ -12,6 +15,7 @@ import {
   PencilIcon,
   PlusIcon,
   SearchIcon,
+  TerminalIcon,
   Undo2Icon,
 } from "lucide-react"
 import Link from "next/link"
@@ -205,18 +209,85 @@ export function ContextUsed({ part }: { part: Part<"context"> }) {
   )
 }
 
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).hostname.replace(/^www./, "")
+  } catch {
+    return url
+  }
+}
+
 export function ToolUses({ parts }: { parts: Part<"tool">[] }) {
   const searches = parts.filter((part) => part.name === "web_search")
-  if (!searches.length) return null
+  const pages = parts.filter((part) => part.name === "fetch_url")
+  if (!searches.length && !pages.length) return null
   return (
-    <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-      <GlobeIcon className="size-3.5" />
-      {searches.map((part, index) => (
-        <span key={index} className="inline-flex items-center gap-1">
-          <SearchIcon className="size-3" />
-          {part.detail ?? "busca"}
-        </span>
-      ))}
+    <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+      {searches.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <GlobeIcon className="size-3.5" />
+          {searches.map((part, index) => (
+            <span key={index} className="inline-flex items-center gap-1">
+              <SearchIcon className="size-3" />
+              {part.detail ?? "busca"}
+            </span>
+          ))}
+        </div>
+      )}
+      {pages.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <BookOpenIcon className="size-3.5" /> Leu
+          {pages.map((part, index) =>
+            part.detail ? (
+              <a
+                key={index}
+                href={part.detail}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                {hostOf(part.detail)}
+              </a>
+            ) : null,
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Código rodado pelo interpretador de código (D74), recolhido por padrão. */
+export function CodeRun({ part }: { part: Part<"code"> }) {
+  return (
+    <Collapsible className="rounded-lg border">
+      <CollapsibleTrigger className="group/code flex w-full items-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+        <TerminalIcon className="size-3.5" /> Código executado
+        <ChevronRightIcon className="ml-auto size-3.5 transition-transform group-data-[panel-open]/code:rotate-90" />
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <pre className="max-h-80 overflow-auto border-t bg-muted/40 p-3 font-mono text-xs leading-relaxed">
+          {part.code}
+        </pre>
+        {part.logs && (
+          <pre className="max-h-60 overflow-auto border-t p-3 font-mono text-xs text-muted-foreground">
+            {part.logs}
+          </pre>
+        )}
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+/** O começo da conversa foi para o modelo como resumo (D67). */
+export function CompactedNote({ part }: { part: Part<"compacted"> }) {
+  return (
+    <div
+      className="flex items-center gap-1.5 text-xs text-muted-foreground"
+      title="As mensagens continuam salvas; só foram resumidas para caber no contexto do modelo."
+    >
+      <FoldVerticalIcon className="size-3.5" />
+      {part.messages}{" "}
+      {part.messages === 1 ? "mensagem antiga entrou" : "mensagens antigas entraram"} como resumo
     </div>
   )
 }
@@ -231,6 +302,10 @@ export function LiveStatus({ tool }: { tool: { tool: string; state: string } }) 
     create_sinapse: "Guardando na memória…",
     update_sinapse: "Atualizando a memória…",
     link_sinapses: "Conectando sinapses…",
+    fetch_url: "Lendo a página…",
+    compact: "Resumindo o começo da conversa…",
+    code_interpreter:
+      tool.state === "preparing" ? "Preparando o ambiente de código…" : "Rodando código…",
   }
   return (
     <div className="flex items-center gap-2 text-xs text-muted-foreground">

@@ -74,17 +74,21 @@ const textOf = (node: unknown): string => {
 }
 
 const components: Components = {
-  // Links sempre em nova aba, sem dar acesso à janela original.
-  a: ({ href, children }) => (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer nofollow"
-      className="font-medium text-primary underline underline-offset-2"
-    >
-      {children}
-    </a>
-  ),
+  // Links sempre em nova aba, sem dar acesso à janela original. Sem href (protocolo descartado,
+  // ex.: `sandbox:` dos arquivos do interpretador de código, que aparecem como anexo): só texto.
+  a: ({ href, children }) =>
+    href ? (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer nofollow"
+        className="font-medium text-primary underline underline-offset-2"
+      >
+        {children}
+      </a>
+    ) : (
+      <span className="font-medium">{children}</span>
+    ),
   pre: ({ children }) => <>{children}</>,
   code: ({ className, children }) => {
     const language = /language-([\w-]+)/.exec(className ?? "")?.[1]

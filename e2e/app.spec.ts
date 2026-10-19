@@ -188,3 +188,57 @@ test("headers de segurança, noindex e manifesto PWA", async ({ request }) => {
   expect(await (await request.get("/robots.txt")).text()).toContain("Disallow: /")
   expect((await (await request.get("/manifest.webmanifest")).json()).name).toBe("Personal AI")
 })
+
+test("conexão que cai no meio: reconecta e mostra a resposta inteira (D68)", async ({ page }) => {
+  const problems = watchErrors(page)
+  await mockApi(page, { dropFirstStream: true })
+  await loginAs(page)
+  await page.getByLabel("Mensagem").fill("Oi")
+  await page.getByRole("button", { name: "Enviar" }).click()
+  await expect(page.locator("strong", { hasText: "Tudo certo" })).toBeVisible()
+  await expect(page.getByText("Sinapse atualizada:")).toBeVisible()
+  await expect(page.getByRole("button", { name: "Enviar" })).toBeVisible()
+  expect(problems).toEqual([])
+})
+
+test("sugestões da tela inicial vêm da memória (D72)", async ({ page }) => {
+  await mockApi(page)
+  await loginAs(page)
+  await expect(page.getByRole("button", { name: "Retomar a receita de pão" })).toBeVisible()
+})
+
+test("“/” abre os prompts salvos e Enter insere o texto (D76)", async ({ page }) => {
+  await mockApi(page)
+  await loginAs(page)
+  const input = page.getByLabel("Mensagem")
+  await input.fill("/res")
+  await expect(page.getByRole("option", { name: /\/resumir/ })).toBeVisible()
+  await input.press("Enter")
+  await expect(input).toHaveValue(/^Resuma o texto abaixo em tópicos curtos:/)
+})
+
+test("👎 com comentário manda a avaliação (D77)", async ({ page }) => {
+  const { feedback } = await mockApi(page)
+  await loginAs(page)
+  await page.getByLabel("Mensagem").fill("Oi")
+  await page.getByRole("button", { name: "Enviar" }).click()
+  await expect(page.getByText("Tudo certo")).toBeVisible()
+
+  await page.getByRole("button", { name: "Não gostei" }).click()
+  await expect.poll(() => feedback.length).toBe(1)
+  await page.getByLabel("O que poderia ser melhor?").fill("Longo demais")
+  await page.getByRole("button", { name: "Enviar", exact: true }).last().click()
+  await expect.poll(() => feedback.at(-1)).toEqual({ rating: "down", note: "Longo demais" })
+  await expect(page.getByRole("button", { name: "Não gostei" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  )
+})
+
+test("rascunho fica salvo ao recarregar a página", async ({ page }) => {
+  await mockApi(page)
+  await loginAs(page)
+  await page.getByLabel("Mensagem").fill("Texto pela metade")
+  await page.reload()
+  await expect(page.getByLabel("Mensagem")).toHaveValue("Texto pela metade")
+})

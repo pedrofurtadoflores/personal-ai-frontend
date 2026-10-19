@@ -8,24 +8,27 @@ export type StreamHandlers = {
 /**
  * Lê a resposta SSE do backend com fetch + ReadableStream (D38): EventSource não envia o
  * header Authorization, e o token nunca vai na URL (D51).
+ *
+ * Devolve `"empty"` quando o servidor responde 204 (ao retomar: não há resposta em andamento).
  */
 export async function streamSse(
-  path: string,
-  body: unknown,
+  request: { path: string; method?: "GET" | "POST"; body?: unknown },
   { onEvent }: StreamHandlers,
   signal: AbortSignal,
-) {
+): Promise<"ended" | "empty"> {
   const token = auth.getToken()
-  const response = await fetch(`${API_URL}${path}`, {
-    method: "POST",
+  const method = request.method ?? "POST"
+  const response = await fetch(`${API_URL}${request.path}`, {
+    method,
     headers: {
-      "content-type": "application/json",
+      ...(method === "POST" ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify(body),
+    ...(method === "POST" ? { body: JSON.stringify(request.body ?? {}) } : {}),
     signal,
   })
 
+  if (response.status === 204) return "empty"
   if (!response.ok || !response.body) {
     if (response.status === 401) auth.clear()
     const error = await response.json().catch(() => ({}))
@@ -53,4 +56,5 @@ export async function streamSse(
       if (event && data) onEvent(event, JSON.parse(data) as Record<string, unknown>)
     }
   }
+  return "ended"
 }

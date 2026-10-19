@@ -47,6 +47,16 @@ export function useUpdateConversation() {
   })
 }
 
+/** Sugestões da tela inicial, a partir da memória (D72). */
+export function useChatSuggestions() {
+  return useQuery({
+    queryKey: ["chat-suggestions"],
+    queryFn: () => unwrap(api.GET("/chat/suggestions")),
+    staleTime: 30 * 60_000,
+    retry: false,
+  })
+}
+
 export function useInvalidate() {
   const queryClient = useQueryClient()
   return (...keys: string[]) =>
@@ -144,10 +154,15 @@ export function useGraph() {
 
 // ─── Arquivos ─────────────────────────────────────────────────────────────────
 
-export function useFiles(origin?: "upload" | "generated") {
+export function useFiles(origin?: "upload" | "generated", folderId?: string) {
   return useQuery({
-    queryKey: ["files", origin ?? "all"],
-    queryFn: () => unwrap(api.GET("/files", { params: { query: origin ? { origin } : {} } })),
+    queryKey: ["files", origin ?? "all", folderId ?? "any"],
+    queryFn: () =>
+      unwrap(
+        api.GET("/files", {
+          params: { query: { ...(origin ? { origin } : {}), ...(folderId ? { folderId } : {}) } },
+        }),
+      ),
     select: (data) => data.files,
     // Enquanto algum arquivo processa, atualiza sozinho.
     refetchInterval: (query) =>

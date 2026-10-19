@@ -400,6 +400,34 @@ export interface paths {
                                 alertThreshold: number;
                                 /** @default 0.01 */
                                 webSearchUsdPerCall: number;
+                                /** @default 0.03 */
+                                codeInterpreterUsdPerContainer: number;
+                                /** @default 60000 */
+                                contextBudgetTokens: number;
+                                /**
+                                 * @default [
+                                 *       {
+                                 *         "name": "resumir",
+                                 *         "text": "Resuma o texto abaixo em tópicos curtos, sem perder números e nomes:"
+                                 *       },
+                                 *       {
+                                 *         "name": "traduzir",
+                                 *         "text": "Traduza o texto abaixo para o inglês, mantendo o tom:"
+                                 *       },
+                                 *       {
+                                 *         "name": "revisar",
+                                 *         "text": "Revise o texto abaixo: corrija gramática e clareza e explique as mudanças principais."
+                                 *       },
+                                 *       {
+                                 *         "name": "explicar",
+                                 *         "text": "Explique de forma simples, com um exemplo concreto:"
+                                 *       }
+                                 *     ]
+                                 */
+                                savedPrompts: {
+                                    name: string;
+                                    text: string;
+                                }[];
                             };
                             voices: string[];
                         };
@@ -527,6 +555,34 @@ export interface paths {
                         alertThreshold?: number;
                         /** @default 0.01 */
                         webSearchUsdPerCall?: number;
+                        /** @default 0.03 */
+                        codeInterpreterUsdPerContainer?: number;
+                        /** @default 60000 */
+                        contextBudgetTokens?: number;
+                        /**
+                         * @default [
+                         *       {
+                         *         "name": "resumir",
+                         *         "text": "Resuma o texto abaixo em tópicos curtos, sem perder números e nomes:"
+                         *       },
+                         *       {
+                         *         "name": "traduzir",
+                         *         "text": "Traduza o texto abaixo para o inglês, mantendo o tom:"
+                         *       },
+                         *       {
+                         *         "name": "revisar",
+                         *         "text": "Revise o texto abaixo: corrija gramática e clareza e explique as mudanças principais."
+                         *       },
+                         *       {
+                         *         "name": "explicar",
+                         *         "text": "Explique de forma simples, com um exemplo concreto:"
+                         *       }
+                         *     ]
+                         */
+                        savedPrompts?: {
+                            name: string;
+                            text: string;
+                        }[];
                     };
                 };
             };
@@ -591,6 +647,34 @@ export interface paths {
                                 alertThreshold: number;
                                 /** @default 0.01 */
                                 webSearchUsdPerCall: number;
+                                /** @default 0.03 */
+                                codeInterpreterUsdPerContainer: number;
+                                /** @default 60000 */
+                                contextBudgetTokens: number;
+                                /**
+                                 * @default [
+                                 *       {
+                                 *         "name": "resumir",
+                                 *         "text": "Resuma o texto abaixo em tópicos curtos, sem perder números e nomes:"
+                                 *       },
+                                 *       {
+                                 *         "name": "traduzir",
+                                 *         "text": "Traduza o texto abaixo para o inglês, mantendo o tom:"
+                                 *       },
+                                 *       {
+                                 *         "name": "revisar",
+                                 *         "text": "Revise o texto abaixo: corrija gramática e clareza e explique as mudanças principais."
+                                 *       },
+                                 *       {
+                                 *         "name": "explicar",
+                                 *         "text": "Explique de forma simples, com um exemplo concreto:"
+                                 *       }
+                                 *     ]
+                                 */
+                                savedPrompts: {
+                                    name: string;
+                                    text: string;
+                                }[];
                             };
                             reindexing: boolean;
                         };
@@ -1401,6 +1485,8 @@ export interface paths {
                             reasoningEffort?: string;
                             webSearch?: boolean;
                             imageGeneration?: boolean;
+                            codeInterpreter?: boolean;
+                            temperature?: number | null;
                         };
                     };
                 };
@@ -1593,17 +1679,35 @@ export interface paths {
                                     type: "tool";
                                     name: string;
                                     detail: string | null;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "mention";
+                                    sinapseId: string;
+                                    title: string;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "compacted";
+                                    messages: number;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "code";
+                                    code: string;
+                                    logs: string | null;
                                 })[];
                                 contentText: string | null;
                                 model: string | null;
                                 /** @enum {string} */
-                                status: "streaming" | "completed" | "stopped" | "error";
+                                status: "streaming" | "completed" | "stopped" | "error" | "incomplete";
                                 error: string | null;
                                 tokensIn: number | null;
                                 tokensCached: number | null;
                                 tokensOut: number | null;
                                 tokensReasoning: number | null;
                                 costUsd: number | null;
+                                /** @enum {string|null} */
+                                rating: "up" | "down" | null;
+                                feedbackNote: string | null;
+                                contextTokens: number | null;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */
@@ -1770,6 +1874,8 @@ export interface paths {
                             reasoningEffort?: string;
                             webSearch?: boolean;
                             imageGeneration?: boolean;
+                            codeInterpreter?: boolean;
+                            temperature?: number | null;
                         };
                     };
                 };
@@ -1952,6 +2058,122 @@ export interface paths {
             };
         };
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{id}/fork": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Abrir em nova conversa: copia o ramo até a mensagem escolhida */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** Format: uuid */
+                        messageId: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            title: string | null;
+                            folderId: string | null;
+                            model: string | null;
+                            systemPrompt: string | null;
+                            settings: {
+                                [key: string]: unknown;
+                            };
+                            anonymous: boolean;
+                            pinned: boolean;
+                            archived: boolean;
+                            currentLeafMessageId: string | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            updatedAt: string;
+                            /** Format: date-time */
+                            deletedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -2185,6 +2407,8 @@ export interface paths {
                                 id: string;
                                 name: string;
                                 position: number;
+                                instructions: string;
+                                sinapseIds: string[];
                             }[];
                         };
                     };
@@ -2244,7 +2468,7 @@ export interface paths {
             };
         };
         put?: never;
-        /** Criar pasta */
+        /** Criar projeto (pasta) */
         post: {
             parameters: {
                 query?: never;
@@ -2256,6 +2480,8 @@ export interface paths {
                 content: {
                     "application/json": {
                         name: string;
+                        instructions?: string;
+                        sinapseIds?: string[];
                     };
                 };
             };
@@ -2270,6 +2496,8 @@ export interface paths {
                             id: string;
                             name: string;
                             position: number;
+                            instructions: string;
+                            sinapseIds: string[];
                         };
                     };
                 };
@@ -2343,7 +2571,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Apagar pasta (as conversas saem da pasta, não são apagadas) */
+        /** Apagar projeto (as conversas e arquivos saem dele, não são apagados) */
         delete: {
             parameters: {
                 query?: never;
@@ -2420,7 +2648,7 @@ export interface paths {
         };
         options?: never;
         head?: never;
-        /** Renomear ou reordenar pasta */
+        /** Renomear, reordenar ou configurar o projeto (instruções e sinapses, D73) */
         patch: {
             parameters: {
                 query?: never;
@@ -2435,6 +2663,8 @@ export interface paths {
                     "application/json": {
                         name?: string;
                         position?: number;
+                        instructions?: string;
+                        sinapseIds?: string[];
                     };
                 };
             };
@@ -2449,6 +2679,8 @@ export interface paths {
                             id: string;
                             name: string;
                             position: number;
+                            instructions: string;
+                            sinapseIds: string[];
                         };
                     };
                 };
@@ -2519,7 +2751,7 @@ export interface paths {
         put?: never;
         /**
          * Enviar mensagem e receber a resposta em streaming
-         * @description Resposta em Server-Sent Events: `start` {userMessage?, assistantMessage}, `delta` {text}, `part` (chip de sinapse, contexto, busca), `image` {fileId, url}, `status` {tool, state}, `error` {error, message} e `done` {message}.
+         * @description Resposta em Server-Sent Events: `start` {userMessage?, assistantMessage}, `delta` {text}, `part` (chip de sinapse, contexto, busca), `image` {fileId, url}, `status` {tool, state}, `error` {error, message} e `done` {message}. A geração não depende da conexão (D68): se ela cair, `GET /conversations/:id/stream` retoma desde o começo.
          */
         post: {
             parameters: {
@@ -2537,12 +2769,16 @@ export interface paths {
                         reasoningEffort?: string;
                         webSearch?: boolean;
                         imageGeneration?: boolean;
+                        codeInterpreter?: boolean;
+                        temperature?: number | null;
                         /** Format: uuid */
                         parentId: string | null;
                         /** @default  */
                         text?: string;
                         /** @default [] */
                         fileIds?: string[];
+                        /** @default [] */
+                        sinapseIds?: string[];
                     };
                 };
             };
@@ -2627,7 +2863,7 @@ export interface paths {
         put?: never;
         /**
          * Gerar outra versão da resposta (fica como irmã da anterior)
-         * @description Resposta em Server-Sent Events: `start` {userMessage?, assistantMessage}, `delta` {text}, `part` (chip de sinapse, contexto, busca), `image` {fileId, url}, `status` {tool, state}, `error` {error, message} e `done` {message}.
+         * @description Resposta em Server-Sent Events: `start` {userMessage?, assistantMessage}, `delta` {text}, `part` (chip de sinapse, contexto, busca), `image` {fileId, url}, `status` {tool, state}, `error` {error, message} e `done` {message}. A geração não depende da conexão (D68): se ela cair, `GET /conversations/:id/stream` retoma desde o começo.
          */
         post: {
             parameters: {
@@ -2646,6 +2882,8 @@ export interface paths {
                         reasoningEffort?: string;
                         webSearch?: boolean;
                         imageGeneration?: boolean;
+                        codeInterpreter?: boolean;
+                        temperature?: number | null;
                     };
                 };
             };
@@ -2719,6 +2957,581 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/conversations/{id}/messages/{messageId}/continue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Continuar uma resposta cortada ou interrompida (vira uma nova versão, D69)
+         * @description Resposta em Server-Sent Events: `start` {userMessage?, assistantMessage}, `delta` {text}, `part` (chip de sinapse, contexto, busca), `image` {fileId, url}, `status` {tool, state}, `error` {error, message} e `done` {message}. A geração não depende da conexão (D68): se ela cair, `GET /conversations/:id/stream` retoma desde o começo.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    messageId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        model?: string;
+                        reasoningEffort?: string;
+                        webSearch?: boolean;
+                        imageGeneration?: boolean;
+                        codeInterpreter?: boolean;
+                        temperature?: number | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description text/event-stream */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": string;
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{id}/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Retomar a resposta em andamento (D68): reenvia tudo desde o começo
+         * @description Resposta em Server-Sent Events: `start` {userMessage?, assistantMessage}, `delta` {text}, `part` (chip de sinapse, contexto, busca), `image` {fileId, url}, `status` {tool, state}, `error` {error, message} e `done` {message}. A geração não depende da conexão (D68): se ela cair, `GET /conversations/:id/stream` retoma desde o começo. Sem resposta em andamento: 204.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description text/event-stream */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": string;
+                    };
+                };
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": null;
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{id}/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Parar a resposta em andamento (o parcial fica salvo como `stopped`) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            stopped: boolean;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/conversations/{id}/messages/{messageId}/feedback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Avaliar uma resposta (👍/👎); com comentário, a IA aprende a preferência (D77) */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                    messageId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        /** @enum {string|null} */
+                        rating: "up" | "down" | null;
+                        note?: string | null;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            conversationId: string;
+                            parentId: string | null;
+                            /** @enum {string} */
+                            role: "user" | "assistant" | "system" | "tool";
+                            content: ({
+                                /** @enum {string} */
+                                type: "text";
+                                text: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "file";
+                                fileId: string;
+                                name: string;
+                                mime: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "image";
+                                fileId: string;
+                                prompt: string | null;
+                            } | {
+                                /** @enum {string} */
+                                type: "sources";
+                                items: {
+                                    url: string;
+                                    title: string;
+                                }[];
+                            } | {
+                                /** @enum {string} */
+                                type: "sinapse";
+                                /** @enum {string} */
+                                action: "created" | "updated" | "linked" | "suggested";
+                                sinapseId: string | null;
+                                title: string;
+                                versionId: string | null;
+                                suggestionId: string | null;
+                            } | {
+                                /** @enum {string} */
+                                type: "context";
+                                sinapses: {
+                                    id: string;
+                                    title: string;
+                                }[];
+                                files: {
+                                    id: string;
+                                    name: string;
+                                }[];
+                            } | {
+                                /** @enum {string} */
+                                type: "tool";
+                                name: string;
+                                detail: string | null;
+                            } | {
+                                /** @enum {string} */
+                                type: "mention";
+                                sinapseId: string;
+                                title: string;
+                            } | {
+                                /** @enum {string} */
+                                type: "compacted";
+                                messages: number;
+                            } | {
+                                /** @enum {string} */
+                                type: "code";
+                                code: string;
+                                logs: string | null;
+                            })[];
+                            contentText: string | null;
+                            model: string | null;
+                            /** @enum {string} */
+                            status: "streaming" | "completed" | "stopped" | "error" | "incomplete";
+                            error: string | null;
+                            tokensIn: number | null;
+                            tokensCached: number | null;
+                            tokensOut: number | null;
+                            tokensReasoning: number | null;
+                            costUsd: number | null;
+                            /** @enum {string|null} */
+                            rating: "up" | "down" | null;
+                            feedbackNote: string | null;
+                            contextTokens: number | null;
+                            /** Format: date-time */
+                            createdAt: string;
+                            /** Format: date-time */
+                            completedAt: string | null;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/chat/suggestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sugestões da tela inicial, a partir da memória e das conversas recentes (D72) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            suggestions: string[];
+                            personalized: boolean;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/files": {
         parameters: {
             query?: never;
@@ -2732,6 +3545,7 @@ export interface paths {
                 query?: {
                     origin?: "upload" | "generated";
                     conversationId?: string;
+                    folderId?: string;
                 };
                 header?: never;
                 path?: never;
@@ -2754,6 +3568,7 @@ export interface paths {
                                 /** @enum {string} */
                                 origin: "upload" | "generated";
                                 conversationId: string | null;
+                                folderId: string | null;
                                 /** @enum {string} */
                                 status: "pending" | "uploaded" | "processing" | "ready" | "error";
                                 error: string | null;
@@ -2835,6 +3650,8 @@ export interface paths {
                         size: number;
                         /** Format: uuid */
                         conversationId?: string | null;
+                        /** Format: uuid */
+                        folderId?: string | null;
                     };
                 };
             };
@@ -2854,6 +3671,7 @@ export interface paths {
                                 /** @enum {string} */
                                 origin: "upload" | "generated";
                                 conversationId: string | null;
+                                folderId: string | null;
                                 /** @enum {string} */
                                 status: "pending" | "uploaded" | "processing" | "ready" | "error";
                                 error: string | null;
@@ -2960,6 +3778,7 @@ export interface paths {
                             /** @enum {string} */
                             origin: "upload" | "generated";
                             conversationId: string | null;
+                            folderId: string | null;
                             /** @enum {string} */
                             status: "pending" | "uploaded" | "processing" | "ready" | "error";
                             error: string | null;
@@ -3065,6 +3884,7 @@ export interface paths {
                                 /** @enum {string} */
                                 origin: "upload" | "generated";
                                 conversationId: string | null;
+                                folderId: string | null;
                                 /** @enum {string} */
                                 status: "pending" | "uploaded" | "processing" | "ready" | "error";
                                 error: string | null;
@@ -5446,17 +6266,35 @@ export interface paths {
                                     type: "tool";
                                     name: string;
                                     detail: string | null;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "mention";
+                                    sinapseId: string;
+                                    title: string;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "compacted";
+                                    messages: number;
+                                } | {
+                                    /** @enum {string} */
+                                    type: "code";
+                                    code: string;
+                                    logs: string | null;
                                 })[];
                                 contentText: string | null;
                                 model: string | null;
                                 /** @enum {string} */
-                                status: "streaming" | "completed" | "stopped" | "error";
+                                status: "streaming" | "completed" | "stopped" | "error" | "incomplete";
                                 error: string | null;
                                 tokensIn: number | null;
                                 tokensCached: number | null;
                                 tokensOut: number | null;
                                 tokensReasoning: number | null;
                                 costUsd: number | null;
+                                /** @enum {string|null} */
+                                rating: "up" | "down" | null;
+                                feedbackNote: string | null;
+                                contextTokens: number | null;
                                 /** Format: date-time */
                                 createdAt: string;
                                 /** Format: date-time */

@@ -2,6 +2,7 @@
 
 import {
   ArrowUpIcon,
+  AtSignIcon,
   BrainIcon,
   FileIcon,
   GlobeIcon,
@@ -10,6 +11,7 @@ import {
   MicIcon,
   PaperclipIcon,
   SquareIcon,
+  SquareTerminalIcon,
   XIcon,
 } from "lucide-react"
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react"
@@ -28,6 +30,7 @@ import { Toggle } from "@/components/ui/toggle"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { ApiError } from "@/lib/api"
 import { startRecording, transcribe } from "@/lib/audio"
+import { useSettings, useSinapses } from "@/lib/queries"
 import type { FileItem } from "@/lib/types"
 import { uploadErrorText, uploadFile } from "@/lib/upload"
 import { cn } from "@/lib/utils"
@@ -37,9 +40,11 @@ export type ComposerOptions = {
   reasoningEffort: string
   webSearch: boolean
   imageGeneration: boolean
+  codeInterpreter: boolean
 }
 
-export type ComposerSubmit = { text: string; files: FileItem[] }
+export type Mention = { id: string; title: string }
+export type ComposerSubmit = { text: string; files: FileItem[]; mentions: Mention[] }
 
 type Pending = {
   key: string
@@ -50,6 +55,8 @@ type Pending = {
   preview?: string
 }
 
+type MenuItem = { key: string; label: string; detail?: string; apply: () => void }
+
 const efforts = [
   ["auto", "Automático"],
   ["none", "Sem raciocínio"],
@@ -58,6 +65,31 @@ const efforts = [
   ["high", "Alto"],
   ["xhigh", "Máximo"],
 ] as const
+
+const DRAFT_PREFIX = "personal-ai.draft."
+
+/** Rascunho por conversa no localStorage (some no envio). Falhas de storage são ignoradas. */
+function readDraft(key: string | undefined) {
+  if (!key) return ""
+  try {
+    return localStorage.getItem(DRAFT_PREFIX + key) ?? ""
+  } catch {
+    return ""
+  }
+}
+
+/** Apaga o rascunho (ex.: o texto foi levado para a conversa recém-criada). */
+export const clearDraft = (key: string) => writeDraft(key, "")
+
+function writeDraft(key: string | undefined, text: string) {
+  if (!key) return
+  try {
+    if (text.trim()) localStorage.setItem(DRAFT_PREFIX + key, text)
+    else localStorage.removeItem(DRAFT_PREFIX + key)
+  } catch {}
+}
+
+const normalize = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
 
 export type ComposerHandle = {
   addFiles: (files: File[]) => void
@@ -79,15 +111,25 @@ export const Composer = forwardRef<
     disabled?: boolean
     autoFocus?: boolean
     initialText?: string
+    /** Chave do rascunho salvo (por conversa). */
+    draftKey?: string
+    /** Conversa anônima: sem @menção de sinapses. */
+    anonymous?: boolean
     extraActions?: React.ReactNode
   }
 >(function Composer(props, ref) {
-  const { options, onOptionsChange, streaming } = props
-  const [text, setText] = useState(props.initialText ?? "")
+  const { options, onOptionsChange, streaming, draftKey } = props
+  const [text, setText] = useState(() => props.initialText || readDraft(draftKey))
   const [pending, setPending] = useState<Pending[]>([])
+  const [mentions, setMentions] = useState<Mention[]>([])
   const [recording, setRecording] = useState<null | "recording" | "transcribing">(null)
+  const [caret, setCaret] = useState(0)
+  const [menuIndex, setMenuIndex] = useState(0)
+  const [menuDismissedAt, setMenuDismissedAt] = useState<string | null>(null)
   const recorder = useRef<Awaited<ReturnType<typeof startRecording>> | null>(null)
   const textarea = useRef<HTMLTextAreaElement>(null)
+  const settings = useSettings()
+  const sinapses = useSinapses()
 
   // Altura automática até ~10 linhas.
   useEffect(() => {
@@ -96,6 +138,8 @@ export const Composer = forwardRef<
     element.style.height = "auto"
     element.style.height = `${Math.min(element.scrollHeight, 260)}px`
   }, [text])
+
+  useEffect(() => writeDraft(draftKey, text), [draftKey, text])
 
   const addFiles = useCallback(
     (files: File[]) => {
@@ -137,6 +181,57 @@ export const Composer = forwardRef<
     setText: (value) => setText(value),
   }))
 
+  /** Troca o texto e põe o cursor em `position` (depois do render). */
+  function replaceText(value: string, position: number) {
+    setText(value)
+    setCaret(position)
+    requestAnimationFrame(() => {
+      textarea.current?.focus()
+      textarea.current?.setSelectionRange(position, position)
+    })
+  }
+
+  // Menu de @menção (sinapses) e de "/" (prompts salvos, D76).
+  const beforeCaret = text.slice(0, caret)
+  const mentionQuery = props.anonymous
+    ? null
+    : (beforeCaret.match(/(?:^|\s)@([\p{L}\p{N}_-]*)$/u)?.[1] ?? null)
+  const slashQuery = text.match(/^\/([\p{L}\p{N}_-]*)$/u)?.[1] ?? null
+  let menu: MenuItem[] = []
+  if (mentionQuery !== null) {
+    const query = normalize(mentionQuery)
+    menu = (sinapses.data?.sinapses ?? [])
+      .filter((sinapse) => !mentions.some((mention) => mention.id === sinapse.id))
+      .filter((sinapse) => normalize(sinapse.title).includes(query))
+      .slice(0, 6)
+      .map((sinapse) => ({
+        key: sinapse.id,
+        label: `${sinapse.emoji ?? "🧠"} ${sinapse.title}`,
+        detail: sinapse.summary,
+        apply: () => {
+          const start = caret - mentionQuery.length - 1
+          replaceText(text.slice(0, start) + text.slice(caret), start)
+          setMentions((list) => [...list, { id: sinapse.id, title: sinapse.title }])
+        },
+      }))
+  } else if (slashQuery !== null) {
+    const query = normalize(slashQuery)
+    menu = (settings.data?.settings.savedPrompts ?? [])
+      .filter((prompt) => normalize(prompt.name).startsWith(query))
+      .slice(0, 8)
+      .map((prompt) => ({
+        key: prompt.name,
+        label: `/${prompt.name}`,
+        detail: prompt.text,
+        apply: () => {
+          const value = `${prompt.text}\n\n`
+          replaceText(value, value.length)
+        },
+      }))
+  }
+  const menuOpen = menu.length > 0 && menuDismissedAt !== text
+  const activeIndex = Math.min(menuIndex, Math.max(menu.length - 1, 0))
+
   const uploading = pending.some((item) => !item.file && !item.error)
   const ready = pending.filter((item) => item.file).map((item) => item.file!)
   const canSend =
@@ -144,8 +239,10 @@ export const Composer = forwardRef<
 
   function submit() {
     if (!canSend) return
-    if (!props.onSubmit({ text: text.trim(), files: ready })) return
+    if (!props.onSubmit({ text: text.trim(), files: ready, mentions })) return
     setText("")
+    setMentions([])
+    writeDraft(draftKey, "")
     pending.forEach((item) => item.preview && URL.revokeObjectURL(item.preview))
     setPending([])
   }
@@ -175,9 +272,60 @@ export const Composer = forwardRef<
   }
 
   return (
-    <div className="rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
-      {pending.length > 0 && (
+    <div className="relative rounded-2xl border bg-background shadow-sm focus-within:ring-2 focus-within:ring-ring/30">
+      {menuOpen && (
+        <div
+          role="listbox"
+          aria-label={mentionQuery !== null ? "Sinapses" : "Prompts salvos"}
+          className="absolute inset-x-0 bottom-full z-30 mb-2 overflow-hidden rounded-xl border bg-popover p-1 text-popover-foreground shadow-md"
+        >
+          <div className="px-2 py-1 text-xs text-muted-foreground">
+            {mentionQuery !== null ? "Mencionar sinapse" : "Prompts salvos"} · ↑↓ e Enter
+          </div>
+          {menu.map((item, index) => (
+            <button
+              key={item.key}
+              type="button"
+              role="option"
+              aria-selected={index === activeIndex}
+              className={cn(
+                "flex w-full flex-col items-start rounded-lg px-2 py-1.5 text-left text-sm",
+                index === activeIndex ? "bg-accent text-accent-foreground" : "hover:bg-muted",
+              )}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setMenuIndex(index)}
+              onClick={() => item.apply()}
+            >
+              <span className="font-medium">{item.label}</span>
+              {item.detail && (
+                <span className="line-clamp-1 text-xs text-muted-foreground">{item.detail}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {(pending.length > 0 || mentions.length > 0) && (
         <div className="flex flex-wrap gap-2 border-b p-2">
+          {mentions.map((mention) => (
+            <span
+              key={mention.id}
+              className="relative inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/5 py-1 pr-7 pl-2 text-xs"
+            >
+              <AtSignIcon className="size-3.5 text-primary" />
+              <span className="max-w-40 truncate">{mention.title}</span>
+              <button
+                type="button"
+                aria-label={`Remover menção a ${mention.title}`}
+                className="absolute top-1/2 right-1 -translate-y-1/2 rounded p-0.5 hover:bg-muted"
+                onClick={() =>
+                  setMentions((list) => list.filter((other) => other.id !== mention.id))
+                }
+              >
+                <XIcon className="size-3.5" />
+              </button>
+            </span>
+          ))}
           {pending.map((item) => (
             <div
               key={item.key}
@@ -219,12 +367,37 @@ export const Composer = forwardRef<
         placeholder={
           recording === "recording"
             ? "Ouvindo… clique no microfone para terminar"
-            : "Pergunte qualquer coisa"
+            : props.anonymous
+              ? "Pergunte qualquer coisa"
+              : "Pergunte qualquer coisa · @ menciona uma sinapse · / usa um prompt salvo"
         }
         aria-label="Mensagem"
         className="block max-h-64 w-full resize-none bg-transparent px-4 pt-3 pb-1 text-base outline-none placeholder:text-muted-foreground md:text-sm"
-        onChange={(event) => setText(event.target.value)}
+        onChange={(event) => {
+          setText(event.target.value)
+          setCaret(event.target.selectionStart)
+          setMenuIndex(0)
+        }}
+        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
         onKeyDown={(event) => {
+          if (menuOpen) {
+            if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+              event.preventDefault()
+              const step = event.key === "ArrowDown" ? 1 : -1
+              setMenuIndex((activeIndex + step + menu.length) % menu.length)
+              return
+            }
+            if ((event.key === "Enter" || event.key === "Tab") && !event.shiftKey) {
+              event.preventDefault()
+              menu[activeIndex]?.apply()
+              return
+            }
+            if (event.key === "Escape") {
+              event.preventDefault()
+              setMenuDismissedAt(text)
+              return
+            }
+          }
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault()
             submit()
@@ -298,6 +471,25 @@ export const Composer = forwardRef<
             <ImageIcon />
           </TooltipTrigger>
           <TooltipContent>Gerar imagens</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Toggle
+                size="sm"
+                pressed={options.codeInterpreter}
+                onPressedChange={(codeInterpreter) => onOptionsChange({ codeInterpreter })}
+                aria-label="Interpretador de código"
+              />
+            }
+          >
+            <SquareTerminalIcon />
+          </TooltipTrigger>
+          <TooltipContent>
+            Interpretador de código: analisa planilhas e CSV, faz contas e gráficos (~US$ 0,03 por
+            sessão)
+          </TooltipContent>
         </Tooltip>
 
         <DropdownMenu>

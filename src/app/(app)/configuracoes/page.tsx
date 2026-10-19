@@ -7,7 +7,10 @@ import {
   HardDriveIcon,
   Loader2Icon,
   MonitorSmartphoneIcon,
+  PlusIcon,
   RefreshCwIcon,
+  SlashIcon,
+  Trash2Icon,
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -360,6 +363,104 @@ function Backups() {
   )
 }
 
+type SavedPrompt = Settings["savedPrompts"][number]
+
+/** Prompts salvos (D76): usados digitando "/" no composer. */
+function SavedPrompts({
+  value,
+  onSave,
+}: {
+  value: SavedPrompt[]
+  onSave: (prompts: SavedPrompt[]) => void
+}) {
+  const [draft, setDraft] = useState(value)
+  const [lastValue, setLastValue] = useState(value)
+  if (value !== lastValue) {
+    setLastValue(value)
+    setDraft(value)
+  }
+  const names = draft.map((prompt) => prompt.name.trim().toLowerCase())
+  const invalid = draft.some(
+    (prompt, index) =>
+      !/^[p{L}p{N}_-]+$/u.test(prompt.name.trim()) ||
+      !prompt.text.trim() ||
+      names.indexOf(prompt.name.trim().toLowerCase()) !== index,
+  )
+  const changed = JSON.stringify(draft) !== JSON.stringify(value)
+  const edit = (index: number, patch: Partial<SavedPrompt>) =>
+    setDraft((list) => list.map((item, i) => (i === index ? { ...item, ...patch } : item)))
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base">
+          <SlashIcon className="size-4" /> Prompts salvos
+        </CardTitle>
+        <CardDescription>
+          No chat, digite “/” e o nome para usar. Nome sem espaços (letras, números, - e _).
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {draft.map((prompt, index) => (
+          <div key={index} className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row">
+            <div className="flex items-center gap-1 sm:w-44">
+              <span className="text-muted-foreground">/</span>
+              <Input
+                aria-label="Nome do prompt"
+                value={prompt.name}
+                maxLength={40}
+                onChange={(event) => edit(index, { name: event.target.value })}
+              />
+            </div>
+            <Textarea
+              aria-label="Texto do prompt"
+              className="flex-1"
+              rows={2}
+              maxLength={4_000}
+              value={prompt.text}
+              onChange={(event) => edit(index, { text: event.target.value })}
+            />
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label={`Apagar /${prompt.name}`}
+              onClick={() => setDraft((list) => list.filter((_, i) => i !== index))}
+            >
+              <Trash2Icon />
+            </Button>
+          </div>
+        ))}
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={draft.length >= 50}
+            onClick={() => setDraft((list) => [...list, { name: "", text: "" }])}
+          >
+            <PlusIcon /> Novo prompt
+          </Button>
+          <Button
+            size="sm"
+            disabled={!changed || invalid}
+            onClick={() =>
+              onSave(
+                draft.map((prompt) => ({ name: prompt.name.trim(), text: prompt.text.trim() })),
+              )
+            }
+          >
+            Salvar prompts
+          </Button>
+          {invalid && changed && (
+            <span className="text-xs text-destructive">
+              Confira os nomes (únicos, sem espaços) e os textos.
+            </span>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function ConfiguracoesPage() {
   const settings = useSettings()
   const update = useUpdateSettings()
@@ -427,8 +528,20 @@ export default function ConfiguracoesPage() {
               onSave={(customInstructions) => save({ customInstructions })}
             />
           </Field>
+          <Field
+            label="Teto de contexto (tokens)"
+            hint="Histórico enviado a cada resposta. Acima disso, o começo da conversa vira um resumo. Menos tokens = mais barato."
+          >
+            <SaveOnBlur
+              type="number"
+              value={String(s.contextBudgetTokens)}
+              onSave={(value) => save({ contextBudgetTokens: Number(value) })}
+            />
+          </Field>
         </CardContent>
       </Card>
+
+      <SavedPrompts value={s.savedPrompts} onSave={(savedPrompts) => save({ savedPrompts })} />
 
       <Card>
         <CardHeader>
@@ -591,6 +704,16 @@ export default function ConfiguracoesPage() {
               type="number"
               value={String(s.webSearchUsdPerCall)}
               onSave={(value) => save({ webSearchUsdPerCall: Number(value) })}
+            />
+          </Field>
+          <Field
+            label="Preço por sessão do interpretador de código (US$)"
+            hint="Página de preços: US$ 0,03 por container (cada um dura até 20 min sem uso)."
+          >
+            <SaveOnBlur
+              type="number"
+              value={String(s.codeInterpreterUsdPerContainer)}
+              onSave={(value) => save({ codeInterpreterUsdPerContainer: Number(value) })}
             />
           </Field>
         </CardContent>

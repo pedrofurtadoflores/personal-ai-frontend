@@ -22,7 +22,8 @@ Leia `../plan.md` (decisões e fases) e `../CLAUDE.md` (convenções comuns).
 
 ## Chat
 
-- O streaming fica em `src/lib/chat/live.ts` (fora dos componentes: trocar de rota não corta a resposta). Leitura do SSE em `src/lib/chat/stream.ts`.
+- O streaming fica em `src/lib/chat/live.ts` (fora dos componentes: trocar de rota não corta a resposta). Leitura do SSE em `src/lib/chat/stream.ts`. A geração vive no servidor (D68): se a conexão cair, `live.ts` reconecta em `GET /conversations/:id/stream`; parar é `POST /conversations/:id/stop` (não aborte o fetch para parar).
+- Composer: @menção de sinapse e "/" para prompts salvos (D76), rascunho por conversa no `localStorage` (D79). Ações da resposta (feedback, regenerar com outro modelo, continuar, fork) ficam em `message-item.tsx`.
 - Mensagens são uma árvore (`src/lib/chat/tree.ts`): editar e regenerar criam irmãos; a tela mostra o ramo até `currentLeafMessageId`.
 - Hooks de dados em `src/lib/queries.ts`; tipos da API em `src/lib/types.ts` (derivados do contrato, não escreva tipos à mão).
 - `CommandDialog` do shadcn base-nova **não** inclui `<Command>`: envolva os filhos você mesmo.

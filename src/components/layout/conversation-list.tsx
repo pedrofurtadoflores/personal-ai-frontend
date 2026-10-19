@@ -5,8 +5,10 @@ import {
   ArchiveIcon,
   FolderIcon,
   FolderPlusIcon,
+  MessageSquarePlusIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  Settings2Icon,
   PinIcon,
   PinOffIcon,
   Trash2Icon,
@@ -34,10 +36,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
+import { ProjectDialog } from "@/components/layout/project-dialog"
 import { api, unwrap } from "@/lib/api"
 import { dateGroup } from "@/lib/format"
 import { useConversations, useFolders, useInvalidate, useUpdateConversation } from "@/lib/queries"
-import type { Conversation } from "@/lib/types"
+import type { Conversation, Folder } from "@/lib/types"
 import { cn } from "@/lib/utils"
 
 function RenameDialog({
@@ -96,7 +99,7 @@ function NewFolderDialog({ onClose }: { onClose: () => void }) {
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nova pasta</DialogTitle>
+          <DialogTitle>Novo projeto</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={(event) => {
@@ -108,8 +111,8 @@ function NewFolderDialog({ onClose }: { onClose: () => void }) {
             value={name}
             onChange={(event) => setName(event.target.value)}
             autoFocus
-            placeholder="Ex.: Trabalho"
-            aria-label="Nome da pasta"
+            placeholder="Ex.: Reforma da casa"
+            aria-label="Nome do projeto"
           />
           <DialogFooter className="mt-4">
             <Button type="submit" disabled={!name.trim() || create.isPending}>
@@ -195,13 +198,13 @@ function ConversationRow({
           </DropdownMenuItem>
           <DropdownMenuSub>
             <DropdownMenuSubTrigger>
-              <FolderIcon /> Mover para pasta
+              <FolderIcon /> Mover para projeto
             </DropdownMenuSubTrigger>
             <DropdownMenuSubContent>
               <DropdownMenuItem
                 onClick={() => update.mutate({ id: conversation.id, folderId: null })}
               >
-                Sem pasta
+                Sem projeto
               </DropdownMenuItem>
               {(folders.data ?? []).map((folder) => (
                 <DropdownMenuItem
@@ -238,6 +241,7 @@ export function ConversationList({ onNavigate }: { onNavigate?: () => void }) {
   const folders = useFolders()
   const [renaming, setRenaming] = useState<Conversation | null>(null)
   const [newFolder, setNewFolder] = useState(false)
+  const [configuring, setConfiguring] = useState<Folder | null>(null)
   const [openFolders, setOpenFolders] = useState<Record<string, boolean>>({})
   const invalidate = useInvalidate()
 
@@ -282,11 +286,11 @@ export function ConversationList({ onNavigate }: { onNavigate?: () => void }) {
       )}
 
       <div className="flex items-center justify-between pr-1">
-        {heading("Pastas")}
+        {heading("Projetos")}
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label="Nova pasta"
+          aria-label="Novo projeto"
           onClick={() => setNewFolder(true)}
         >
           <FolderPlusIcon />
@@ -307,18 +311,43 @@ export function ConversationList({ onNavigate }: { onNavigate?: () => void }) {
                 <span className="truncate">{folder.name}</span>
                 <span className="ml-auto text-xs text-muted-foreground">{items.length}</span>
               </button>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`Apagar pasta ${folder.name}`}
-                className="mr-1 opacity-0 group-hover/folder:opacity-100"
-                onClick={async () => {
-                  await unwrap(api.DELETE("/folders/{id}", { params: { path: { id: folder.id } } }))
-                  await invalidate("folders", "conversations")
-                }}
-              >
-                <Trash2Icon />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      aria-label={`Ações do projeto ${folder.name}`}
+                      className="mr-1 opacity-0 group-hover/folder:opacity-100 aria-expanded:opacity-100 max-md:opacity-100"
+                    />
+                  }
+                >
+                  <MoreHorizontalIcon />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    render={<Link href={`/?projeto=${folder.id}`} onClick={onNavigate} />}
+                  >
+                    <MessageSquarePlusIcon /> Nova conversa aqui
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setConfiguring(folder)}>
+                    <Settings2Icon /> Configurar projeto
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onClick={async () => {
+                      await unwrap(
+                        api.DELETE("/folders/{id}", { params: { path: { id: folder.id } } }),
+                      )
+                      await invalidate("folders", "conversations")
+                      toast("Projeto apagado. As conversas e arquivos continuam salvos.")
+                    }}
+                  >
+                    <Trash2Icon /> Apagar projeto
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
             {open && (
               <div className="ml-3 border-l pl-1">
@@ -345,6 +374,7 @@ export function ConversationList({ onNavigate }: { onNavigate?: () => void }) {
 
       {renaming && <RenameDialog conversation={renaming} onClose={() => setRenaming(null)} />}
       {newFolder && <NewFolderDialog onClose={() => setNewFolder(false)} />}
+      {configuring && <ProjectDialog folder={configuring} onClose={() => setConfiguring(null)} />}
     </div>
   )
 }

@@ -1,12 +1,15 @@
 import type { QueryClient } from "@tanstack/react-query"
 import { useSyncExternalStore } from "react"
-import { ApiError } from "@/lib/api"
+import { api, ApiError, unwrap } from "@/lib/api"
 import { streamSse } from "@/lib/chat/stream"
 import type { Message, MessagePart } from "@/lib/types"
 
 /**
  * Respostas em andamento, guardadas fora dos componentes: trocar de página (ex.: a conversa
  * nova que acabou de ganhar URL) não interrompe o streaming.
+ *
+ * A geração vive no servidor (D68): se a conexão cair (celular bloqueado, troca de rede),
+ * o front se reconecta em `GET /conversations/:id/stream` e recebe tudo de novo desde o começo.
  */
 export type LiveReply = {
   conversationId: string
@@ -16,12 +19,18 @@ export type LiveReply = {
   status: "streaming" | "error"
   tool: { tool: string; state: string } | null
   error: string | null
+  /** Conexão caiu, mas a resposta pode continuar no servidor: dá para tentar de novo. */
+  reconnectable: boolean
+  /** Reconectando depois de a conexão cair. */
+  reconnecting: boolean
 }
 
 type ConversationData = {
   conversation: { currentLeafMessageId: string | null }
   messages: Message[]
 }
+
+const RETRY_DELAYS_MS = [1_000, 2_000, 4_000, 8_000]
 
 const replies = new Map<string, LiveReply>()
 const controllers = new Map<string, AbortController>()
@@ -55,8 +64,14 @@ export function useLiveReply(conversationId: string | null | undefined) {
 export const isStreaming = (conversationId: string) =>
   replies.get(conversationId)?.status === "streaming"
 
-export function stopReply(conversationId: string) {
-  controllers.get(conversationId)?.abort()
+/** Parar é um pedido ao servidor (D68); ele salva o parcial e encerra o streaming. */
+export async function stopReply(conversationId: string) {
+  try {
+    await unwrap(api.POST("/conversations/{id}/stop", { params: { path: { id: conversationId } } }))
+  } catch {
+    // Sem servidor, pelo menos para de esperar aqui.
+    controllers.get(conversationId)?.abort()
+  }
 }
 
 const conversationKey = (id: string) => ["conversation", id]
@@ -85,18 +100,29 @@ export const errorText: Record<string, string> = {
   rate_limited: "Muitas mensagens seguidas. Espere um pouco.",
   empty_message: "Escreva uma mensagem ou anexe um arquivo.",
   reply_in_progress: "Já tem uma resposta em andamento nesta conversa. Espere ela terminar.",
+  not_continuable: "Esta resposta não pode ser continuada.",
+  anonymous_memory: "Conversa anônima não usa a memória.",
 }
 
-/** Envia (ou regenera) e acompanha a resposta em streaming. */
-export async function startReply(params: {
+const sleep = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, ms)
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer)
+      resolve()
+    })
+  })
+
+/**
+ * Acompanha uma resposta: abre o pedido inicial (enviar/regenerar/continuar, ou retomar) e,
+ * se a conexão cair antes do `done`, reconecta e recebe tudo de novo.
+ */
+async function follow(params: {
   queryClient: QueryClient
   conversationId: string
-  path: string
-  body: unknown
+  initial: { path: string; method?: "GET" | "POST"; body?: unknown }
 }) {
   const { queryClient, conversationId } = params
-  if (isStreaming(conversationId)) return
-
   const live: LiveReply = {
     conversationId,
     assistantId: null,
@@ -105,6 +131,8 @@ export async function startReply(params: {
     status: "streaming",
     tool: null,
     error: null,
+    reconnectable: false,
+    reconnecting: false,
   }
   replies.set(conversationId, live)
   const controller = new AbortController()
@@ -117,54 +145,75 @@ export async function startReply(params: {
     emit()
   }
 
-  try {
-    await streamSse(
-      params.path,
-      params.body,
-      {
-        onEvent(event, data) {
-          switch (event) {
-            case "start": {
-              const assistant = data.assistantMessage as Message
-              const items = [assistant, ...(data.userMessage ? [data.userMessage as Message] : [])]
-              upsertMessages(queryClient, conversationId, items, assistant.id)
-              update({ assistantId: assistant.id })
-              break
-            }
-            case "delta":
-              update({ text: live.text + String(data.text), tool: null })
-              break
-            case "part":
-              update({ parts: [...live.parts, data as MessagePart] })
-              break
-            case "image":
-              queryClient.setQueryData(["file-url", data.fileId], data.url)
-              break
-            case "status":
-              update({ tool: data as LiveReply["tool"] })
-              break
-            case "error":
-              update({ error: String(data.message ?? "Erro ao gerar a resposta.") })
-              break
-            case "done": {
-              const message = data.message as Message
-              upsertMessages(queryClient, conversationId, [message])
-              break
-            }
-          }
-        },
-      },
-      controller.signal,
-    )
-    replies.delete(conversationId)
-  } catch (error) {
-    if (controller.signal.aborted) {
-      // O backend salva o parcial como "stopped"; recarrega para mostrar o que ficou.
-      replies.delete(conversationId)
-    } else {
-      const code = error instanceof ApiError ? error.code : "network_error"
-      update({ status: "error", error: errorText[code] ?? "Não foi possível gerar a resposta." })
+  let finished = false
+  const onEvent = (event: string, data: Record<string, unknown>) => {
+    switch (event) {
+      case "start": {
+        const assistant = data.assistantMessage as Message
+        const items = [assistant, ...(data.userMessage ? [data.userMessage as Message] : [])]
+        upsertMessages(queryClient, conversationId, items, assistant.id)
+        // Na reconexão, o servidor manda tudo de novo: recomeça do zero.
+        update({ assistantId: assistant.id, text: "", parts: [], tool: null, reconnecting: false })
+        break
+      }
+      case "delta":
+        update({ text: live.text + String(data.text), tool: null })
+        break
+      case "part":
+        update({ parts: [...live.parts, data as MessagePart] })
+        break
+      case "image":
+        queryClient.setQueryData(["file-url", data.fileId], data.url)
+        break
+      case "status":
+        update({ tool: data as LiveReply["tool"] })
+        break
+      case "error":
+        update({ error: String(data.message ?? "Erro ao gerar a resposta.") })
+        break
+      case "done": {
+        finished = true
+        upsertMessages(queryClient, conversationId, [data.message as Message])
+        break
+      }
     }
+  }
+
+  try {
+    let request = params.initial
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const result = await streamSse(request, { onEvent }, controller.signal)
+        // Terminou, ou não há nada em andamento no servidor (o refetch abaixo mostra o estado final).
+        if (finished || result === "empty") break
+        throw new ApiError(0, "network_error") // conexão fechada antes do fim
+      } catch (error) {
+        if (controller.signal.aborted || finished) break
+        const code = error instanceof ApiError ? error.code : "network_error"
+        // Erro de verdade da API (409, 429, 400…): não adianta reconectar.
+        if (code !== "network_error") {
+          update({
+            status: "error",
+            error: errorText[code] ?? "Não foi possível gerar a resposta.",
+          })
+          return
+        }
+        if (attempt >= RETRY_DELAYS_MS.length) {
+          update({
+            status: "error",
+            reconnectable: true,
+            reconnecting: false,
+            error: "A conexão caiu. A resposta continua no servidor: reconecte para ver.",
+          })
+          return
+        }
+        update({ reconnecting: true })
+        await sleep(RETRY_DELAYS_MS[attempt]!, controller.signal)
+        if (controller.signal.aborted) break
+        request = { path: `/conversations/${conversationId}/stream`, method: "GET" }
+      }
+    }
+    replies.delete(conversationId)
   } finally {
     controllers.delete(conversationId)
     emit()
@@ -184,6 +233,34 @@ export async function startReply(params: {
       }
     }
   }
+}
+
+/** Envia, regenera ou continua, e acompanha a resposta em streaming. */
+export async function startReply(params: {
+  queryClient: QueryClient
+  conversationId: string
+  path: string
+  body: unknown
+}) {
+  if (isStreaming(params.conversationId)) return
+  await follow({
+    queryClient: params.queryClient,
+    conversationId: params.conversationId,
+    initial: { path: params.path, method: "POST", body: params.body },
+  })
+}
+
+/**
+ * Retoma a resposta em andamento no servidor (aba reaberta, conexão que caiu, outro aparelho).
+ * Sem nada em andamento, só recarrega a conversa.
+ */
+export async function resumeReply(queryClient: QueryClient, conversationId: string) {
+  if (isStreaming(conversationId)) return
+  await follow({
+    queryClient,
+    conversationId,
+    initial: { path: `/conversations/${conversationId}/stream`, method: "GET" },
+  })
 }
 
 export function clearReplyError(conversationId: string) {
