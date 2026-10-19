@@ -62,6 +62,7 @@ const efforts = [
 export type ComposerHandle = {
   addFiles: (files: File[]) => void
   focus: () => void
+  getText: () => string
   setText: (text: string) => void
 }
 
@@ -71,16 +72,18 @@ export const Composer = forwardRef<
     conversationId: string | null
     options: ComposerOptions
     onOptionsChange: (options: Partial<ComposerOptions>) => void
-    onSubmit: (input: ComposerSubmit) => void
+    /** Devolve `false` se o envio foi recusado (o texto e os anexos ficam no composer). */
+    onSubmit: (input: ComposerSubmit) => boolean
     onStop: () => void
     streaming: boolean
     disabled?: boolean
     autoFocus?: boolean
+    initialText?: string
     extraActions?: React.ReactNode
   }
 >(function Composer(props, ref) {
   const { options, onOptionsChange, streaming } = props
-  const [text, setText] = useState("")
+  const [text, setText] = useState(props.initialText ?? "")
   const [pending, setPending] = useState<Pending[]>([])
   const [recording, setRecording] = useState<null | "recording" | "transcribing">(null)
   const recorder = useRef<Awaited<ReturnType<typeof startRecording>> | null>(null)
@@ -130,6 +133,7 @@ export const Composer = forwardRef<
   useImperativeHandle(ref, () => ({
     addFiles,
     focus: () => textarea.current?.focus(),
+    getText: () => text,
     setText: (value) => setText(value),
   }))
 
@@ -140,7 +144,7 @@ export const Composer = forwardRef<
 
   function submit() {
     if (!canSend) return
-    props.onSubmit({ text: text.trim(), files: ready })
+    if (!props.onSubmit({ text: text.trim(), files: ready })) return
     setText("")
     pending.forEach((item) => item.preview && URL.revokeObjectURL(item.preview))
     setPending([])

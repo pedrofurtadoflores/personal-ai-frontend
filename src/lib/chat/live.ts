@@ -84,6 +84,7 @@ export const errorText: Record<string, string> = {
   openai_not_configured: "A chave da OpenAI não está configurada no backend.",
   rate_limited: "Muitas mensagens seguidas. Espere um pouco.",
   empty_message: "Escreva uma mensagem ou anexe um arquivo.",
+  reply_in_progress: "Já tem uma resposta em andamento nesta conversa. Espere ela terminar.",
 }
 
 /** Envia (ou regenera) e acompanha a resposta em streaming. */

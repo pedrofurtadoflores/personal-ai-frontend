@@ -87,6 +87,27 @@ test("chat: envia, recebe em streaming, mostra o chip de memória e regenera", a
   expect(problems).toEqual([])
 })
 
+test("uma mensagem por vez: enviar de novo antes da resposta não duplica (D66)", async ({
+  page,
+}) => {
+  const { sent, conversations } = await mockApi(page, { createDelayMs: 800 })
+  await loginAs(page)
+
+  const input = page.getByLabel("Mensagem")
+  await input.fill("Primeira")
+  await input.press("Enter")
+  // Ainda criando a conversa: o segundo Enter é recusado e o texto fica no composer.
+  await input.fill("Segunda")
+  await input.press("Enter")
+  await expect(page.getByRole("button", { name: "Enviar" })).toBeDisabled()
+
+  await expect(page).toHaveURL(/\/c\//)
+  await expect(page.getByText("Tudo certo")).toBeVisible()
+  expect(conversations.size).toBe(1)
+  expect(sent).toHaveLength(1)
+  await expect(page.getByLabel("Mensagem")).toHaveValue("Segunda")
+})
+
 test("markdown da IA não executa HTML (D36)", async ({ page }) => {
   const problems = watchErrors(page)
   await mockApi(page)

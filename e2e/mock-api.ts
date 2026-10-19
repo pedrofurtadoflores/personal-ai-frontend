@@ -4,7 +4,13 @@ import { E2E_API_URL } from "../playwright.config"
 export const TOKEN = "token-de-teste"
 export const SESSION_KEY = "personal-ai.session"
 
-export type MockOptions = { loginStatus?: number; retryAfter?: number; meStatus?: number }
+export type MockOptions = {
+  loginStatus?: number
+  retryAfter?: number
+  meStatus?: number
+  /** Atraso do POST /conversations, para testar o que acontece enquanto a conversa é criada. */
+  createDelayMs?: number
+}
 
 const now = () => new Date().toISOString()
 const uuid = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`
@@ -93,7 +99,7 @@ const sse = (events: [string, unknown][]) =>
  * Registra os headers Authorization recebidos e os corpos enviados ao chat.
  */
 export async function mockApi(page: Page, options: MockOptions = {}) {
-  const { loginStatus = 200, retryAfter, meStatus = 200 } = options
+  const { loginStatus = 200, retryAfter, meStatus = 200, createDelayMs = 0 } = options
   const authHeaders: string[] = []
   const sent: Record<string, unknown>[] = []
   let counter = 1
@@ -154,6 +160,7 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
       return json({ conversations: [...conversations.values()].map((item) => item.conversation) })
     }
     if (path === "/conversations" && method === "POST") {
+      if (createDelayMs) await new Promise((resolve) => setTimeout(resolve, createDelayMs))
       const id = uuid(counter++)
       const body = request.postDataJSON() as Record<string, unknown>
       const conversation = {
@@ -250,5 +257,5 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     return json({ error: "not_found" }, 404)
   })
 
-  return { authHeaders, sent }
+  return { authHeaders, sent, conversations }
 }

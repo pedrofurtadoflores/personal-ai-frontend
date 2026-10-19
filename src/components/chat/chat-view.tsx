@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { api, unwrap } from "@/lib/api"
-import { clearReplyError, startReply, stopReply, useLiveReply } from "@/lib/chat/live"
+import { clearReplyError, isStreaming, startReply, stopReply, useLiveReply } from "@/lib/chat/live"
 import { branch, buildTree, latestLeaf, siblings } from "@/lib/chat/tree"
 import { formatUsd } from "@/lib/format"
 import { useConversation, useSettings, useUpdateConversation } from "@/lib/queries"
@@ -30,13 +30,29 @@ const suggestions = [
   "Crie um plano de estudos",
 ]
 
+/**
+ * Texto digitado enquanto a conversa nova era criada. A troca de URL remonta a tela; sem
+ * isso, o rascunho sumiria. Lido no primeiro render e apagado depois (seguro no StrictMode).
+ */
+const carriedDrafts = new Map<string, string>()
+
 export function ChatView({ conversationId }: { conversationId: string | null }) {
+  const [initialText] = useState(() => (conversationId && carriedDrafts.get(conversationId)) || "")
+  useEffect(() => {
+    if (conversationId) carriedDrafts.delete(conversationId)
+  }, [conversationId])
   const router = useRouter()
   const queryClient = useQueryClient()
   const settings = useSettings()
   const conversation = useConversation(conversationId)
   const updateConversation = useUpdateConversation()
-  const live = useLiveReply(conversationId)
+  // Conversa criada aqui mesmo, antes de a URL mudar: o streaming dela já vale para esta tela.
+  const [createdId, setCreatedId] = useState<string | null>(null)
+  const activeId = conversationId ?? createdId
+  const live = useLiveReply(activeId)
+  // Criando a conversa (POST /conversations): ainda não há streaming, mas já está ocupado.
+  const creating = useRef(false)
+  const [isCreating, setIsCreating] = useState(false)
   const composer = useRef<ComposerHandle>(null)
   const scroller = useRef<HTMLDivElement>(null)
   const stickToBottom = useRef(true)
@@ -94,8 +110,10 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
         webSearch: options.webSearch,
         imageGeneration: options.imageGeneration,
       }
-      let id = conversationId
+      let id = activeId
       if (!id) {
+        creating.current = true
+        setIsCreating(true)
         try {
           const created = await unwrap(
             api.POST("/conversations", {
@@ -112,10 +130,17 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
           )
           id = created.id
           queryClient.setQueryData(["conversation", id], { conversation: created, messages: [] })
+          setCreatedId(id)
+          const draft = composer.current?.getText()
+          if (draft) carriedDrafts.set(id, draft)
           router.replace(`/c/${id}`)
         } catch {
           toast.error("Não foi possível criar a conversa.")
+          composer.current?.setText(text)
           return
+        } finally {
+          creating.current = false
+          setIsCreating(false)
         }
       }
       stickToBottom.current = true
@@ -128,8 +153,8 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
       })
     },
     [
+      activeId,
       anonymous,
-      conversationId,
       options.imageGeneration,
       options.model,
       options.reasoningEffort,
@@ -139,6 +164,16 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
       visible,
     ],
   )
+
+  /**
+   * Uma mensagem por vez: enquanto a conversa é criada ou a resposta chega, recusa o envio
+   * (o composer mantém o texto). Confere o estado na hora, sem esperar o próximo render.
+   */
+  function trySend(input: ComposerSubmit, parentOverride?: string | null) {
+    if (creating.current || (activeId && isStreaming(activeId))) return false
+    void send(input, parentOverride)
+    return true
+  }
 
   function regenerate(message: Message) {
     if (!conversationId) return
@@ -250,7 +285,8 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
                 <button
                   key={suggestion}
                   className="rounded-xl border px-3 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted"
-                  onClick={() => void send({ text: suggestion, files: [] })}
+                  disabled={isCreating || streaming}
+                  onClick={() => trySend({ text: suggestion, files: [] })}
                 >
                   {suggestion}
                 </button>
@@ -277,7 +313,7 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
                               ? [{ id: part.fileId } as ComposerSubmit["files"][number]]
                               : [],
                           )
-                          void send({ text, files }, message.parentId)
+                          trySend({ text, files }, message.parentId)
                         }
                       : undefined
                   }
@@ -309,9 +345,11 @@ export function ChatView({ conversationId }: { conversationId: string | null }) 
           conversationId={conversationId}
           options={options}
           onOptionsChange={changeOptions}
-          onSubmit={(input) => void send(input)}
-          onStop={() => conversationId && stopReply(conversationId)}
+          onSubmit={(input) => trySend(input)}
+          onStop={() => activeId && stopReply(activeId)}
           streaming={streaming}
+          disabled={isCreating}
+          initialText={initialText}
           autoFocus
           extraActions={
             conversationId ? (
