@@ -182,6 +182,143 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === "/images") return json({ images: [] })
     if (path === "/backups") return json({ backups: [] })
 
+    // Financeiro: uma conta, uma categoria e um lançamento, o suficiente para as telas abrirem.
+    if (path.startsWith("/finance/")) {
+      const today = new Date().toISOString().slice(0, 10)
+      const month = today.slice(0, 7)
+      const account = {
+        id: uuid(500),
+        name: "Bradesco",
+        type: "checking",
+        institution: "bradesco",
+        holder: "Pedro",
+        closingDay: null,
+        dueDay: null,
+        openingBalance: 100000,
+        openingDate: `${month}-01`,
+        bankBalance: 100000,
+        bankBalanceDate: today,
+        position: 0,
+        archivedAt: null,
+      }
+      const category = {
+        id: uuid(501),
+        name: "Alimentação",
+        kind: "expense",
+        nature: "variable",
+        position: 0,
+        archivedAt: null,
+      }
+      const tx = {
+        id: uuid(502),
+        accountId: account.id,
+        date: today,
+        amount: -4800,
+        class: "normal",
+        description: "Feira",
+        originalDescription: "PIX ENVIADO",
+        categoryId: category.id,
+        nature: null,
+        status: "confirmed",
+        categorySource: "user",
+        aiConfidence: null,
+        aiQuestion: null,
+        aiSuggestions: [],
+        installment: null,
+        recurringId: null,
+        recurringPeriod: null,
+        deferredFrom: null,
+        deferralReason: null,
+        manual: false,
+        notes: null,
+        splits: null,
+        invoiceDue: null,
+        flag: null,
+        payable: false,
+        editableAmount: false,
+      }
+      const totals = {
+        incomeRealized: 0,
+        incomePlanned: 0,
+        expenseRealized: 4800,
+        expensePlanned: 0,
+        fixedIncome: 0,
+        variableIncome: 0,
+        fixedExpense: 0,
+        variableExpense: 4800,
+        surplus: -4800,
+        goal: 50000,
+        free: -54800,
+        daysLeft: 3,
+        freePerDay: null,
+      }
+      const finance: Record<string, unknown> = {
+        "/finance/accounts": { accounts: [account] },
+        "/finance/categories": { categories: [category] },
+        "/finance/settings": { monthlySavingGoal: 50000, aiConfidenceThreshold: 0.85 },
+        "/finance/review": { items: [], ruleSuggestions: [] },
+        "/finance/rules": { rules: [] },
+        "/finance/pending": { items: [] },
+        "/finance/debts": { items: [] },
+        "/finance/overview": {
+          month,
+          today,
+          totals,
+          categories: [{ categoryId: category.id, amount: 4800, average: null }],
+          flow: { income: [], expense: [tx] },
+          bills: [],
+          cash: null,
+          balances: [],
+          alerts: { reviewCount: 0, overdue: [], negativeAccounts: [], statementsUntil: today },
+        },
+        "/finance/statements": {
+          today,
+          months: [
+            {
+              month,
+              accounts: [
+                {
+                  accountId: account.id,
+                  status: "open",
+                  coveredUntil: today,
+                  lastImportAt: null,
+                  files: [],
+                },
+              ],
+            },
+          ],
+        },
+        "/finance/planning": {
+          month,
+          recurring: [],
+          installments: [],
+          commitments: [],
+          totals: { fixedIncome: 0, fixedExpenses: 0 },
+        },
+        "/finance/net-worth": {
+          today,
+          checking: [
+            {
+              accountId: account.id,
+              balance: 95200,
+              projectedEndOfMonth: 95200,
+              bankBalance: 100000,
+              bankBalanceDate: today,
+            },
+          ],
+          cards: [],
+          assets: [],
+          installmentsLeft: 0,
+          debtsLeft: 0,
+          have: 95200,
+          owe: 0,
+          total: 95200,
+          series: [{ month, total: 95200 }],
+        },
+      }
+      if (method === "GET" && path in finance) return json(finance[path])
+    }
+
     if (path === "/conversations" && method === "GET") {
       return json({ conversations: [...conversations.values()].map((item) => item.conversation) })
     }

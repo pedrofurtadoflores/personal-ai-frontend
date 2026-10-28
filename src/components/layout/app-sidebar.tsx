@@ -10,6 +10,7 @@ import {
   SearchIcon,
   SettingsIcon,
   Trash2Icon,
+  WalletIcon,
 } from "lucide-react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils"
 const navItems = [
   { href: "/sinapses", label: "Sinapses", icon: BrainCircuitIcon },
   { href: "/arquivos", label: "Arquivos", icon: FolderIcon },
+  { href: "/financeiro", label: "Financeiro", icon: WalletIcon },
   { href: "/uso", label: "Uso e custos", icon: BarChart3Icon },
   { href: "/configuracoes", label: "Configurações", icon: SettingsIcon },
 ]
