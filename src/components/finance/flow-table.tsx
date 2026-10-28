@@ -340,7 +340,7 @@ function FlowRow({
         highlight && "animate-pulse bg-primary/10",
       )}
     >
-      <td className={cn(cell, "w-14 max-md:[grid-area:date]")}>
+      <td className={cn(cell, "w-[4.5rem] max-md:[grid-area:date]")}>
         <TextCell
           col="date"
           ariaLabel="Data"
@@ -366,7 +366,7 @@ function FlowRow({
           <FlagPill tx={tx} />
         </div>
       </td>
-      <td className={cn(cell, "w-32 max-md:[grid-area:cat]")}>
+      <td className={cn(cell, "w-36 max-md:[grid-area:cat]")}>
         {tx.splits?.length ? (
           <button
             className="h-9 w-full truncate rounded-md px-2 text-left hover:ring-1 hover:ring-border"
@@ -389,7 +389,7 @@ function FlowRow({
           />
         )}
       </td>
-      <td className={cn(cell, "w-24 max-md:[grid-area:acc]")}>
+      <td className={cn(cell, "w-36 max-md:[grid-area:acc]")}>
         {tx.editableAmount ? (
           <select
             data-col="acc"
@@ -620,7 +620,7 @@ export function FlowTable({
         <span className="ml-auto font-semibold tabular-nums">{money(total)}</span>
       </div>
       <div ref={scroller} className="max-h-[68vh] overflow-auto max-md:max-h-none">
-        <table className="w-full min-w-[640px] table-fixed border-collapse text-sm max-md:block max-md:min-w-0">
+        <table className="w-full min-w-[880px] table-fixed border-collapse text-sm max-md:block max-md:min-w-0">
           <thead className="sticky top-0 z-10 bg-card text-xs text-muted-foreground max-md:hidden">
             <tr className="border-b">
               {["Data", "Descrição", "Categoria", "Conta", "Tipo", "Valor", "Notas"].map((h, i) => (
@@ -629,7 +629,7 @@ export function FlowTable({
                   className={cn(
                     "px-2 py-1.5 text-left font-medium",
                     i === 5 && "text-right",
-                    ["w-14", "", "w-32", "w-24", "w-20", "w-24", "w-40"][i],
+                    ["w-[4.5rem]", "", "w-36", "w-36", "w-20", "w-24", "w-40"][i],
                   )}
                 >
                   {h}
