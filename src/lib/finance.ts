@@ -23,6 +23,22 @@ type Body<P extends keyof paths, M extends keyof paths[P]> = paths[P][M] extends
 export type FinAccount = Ok<"/finance/accounts", "get">["accounts"][number]
 export type FinCategory = Ok<"/finance/categories", "get">["categories"][number]
 export type Overview = Ok<"/finance/overview", "get">
+/** Cores do Financeiro: entradas em verde, saídas em vermelho (texto, fundo suave e barra). */
+export const tone = {
+  income: {
+    text: "text-emerald-600 dark:text-emerald-400",
+    soft: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400",
+    bar: "bg-emerald-500",
+    border: "border-t-emerald-500",
+  },
+  expense: {
+    text: "text-rose-600 dark:text-rose-400",
+    soft: "bg-rose-500/10 text-rose-700 dark:text-rose-400",
+    bar: "bg-rose-500/80",
+    border: "border-t-rose-500",
+  },
+} as const
+
 export type Tx = Overview["flow"]["expense"][number]
 /** Fatura do cartão que vence no mês: entra nas saídas no lugar das compras (F81). */
 export type Bill = Overview["bills"][number]

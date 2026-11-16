@@ -1,6 +1,16 @@
 "use client"
 
-import { ChevronRightIcon, Loader2Icon, XIcon } from "lucide-react"
+import {
+  ArrowDownLeftIcon,
+  ArrowUpRightIcon,
+  ChevronRightIcon,
+  Loader2Icon,
+  ScaleIcon,
+  TrendingDownIcon,
+  TrendingUpIcon,
+  WalletIcon,
+  XIcon,
+} from "lucide-react"
 import Link from "next/link"
 import { useState } from "react"
 import {
@@ -21,6 +31,7 @@ import {
   money,
   type Overview,
   signedMoney,
+  tone,
   type Tx,
   useFinAccounts,
   useFinCategories,
@@ -143,6 +154,11 @@ export default function VisaoGeralPage() {
   const none = expenseCats.find((c) => !c.categoryId)
   const shown = [...(showAll ? named : named.slice(0, 6)), ...(none ? [none] : [])]
   const totalOut = expenseCats.reduce((s, c) => s + c.amount, 0)
+  // Parte de cada categoria sobre as entradas do mês; sem entradas, sobre as saídas.
+  const totalIn = totals.incomeRealized + totals.incomePlanned
+  const shareBase = totalIn > 0 ? totalIn : totalOut
+  const shareOf = shareBase > 0 ? (amount: number) => Math.round((amount / shareBase) * 100) : null
+  const shareLabel = totalIn > 0 ? "das entradas" : "das saídas"
   const scale = Math.max(...expenseCats.map((c) => Math.max(c.amount, c.average ?? 0)), 1)
 
   return (
@@ -174,42 +190,35 @@ export default function VisaoGeralPage() {
             today={today}
           />
         </div>
-        <div className="flex flex-wrap items-center gap-x-5 gap-y-1 rounded-xl border bg-muted/30 px-4 py-2 text-sm">
-          <button
-            className="hover:underline"
+        <div className="grid divide-y overflow-hidden rounded-xl border bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <MiniStat
+            icon={<ArrowDownLeftIcon />}
+            iconClass={tone.income.soft}
+            label="Entradas totais"
+            value={money(totals.incomeRealized + totals.incomePlanned)}
+            valueClass={tone.income.text}
+            sub={
+              totals.incomePlanned ? `${money(totals.incomePlanned)} a receber` : "tudo recebido"
+            }
             onClick={() => openSide("income")}
-            title={
-              totals.incomePlanned ? `${money(totals.incomePlanned)} ainda a receber` : undefined
-            }
-          >
-            <span className="text-muted-foreground">Entradas totais </span>
-            <span className="font-semibold tabular-nums">
-              {money(totals.incomeRealized + totals.incomePlanned)}
-            </span>
-          </button>
-          <button
-            className="hover:underline"
+          />
+          <MiniStat
+            icon={<ArrowUpRightIcon />}
+            iconClass={tone.expense.soft}
+            label="Saídas totais"
+            value={money(totals.expenseRealized + totals.expensePlanned)}
+            valueClass={tone.expense.text}
+            sub={totals.expensePlanned ? `${money(totals.expensePlanned)} a pagar` : "tudo pago"}
             onClick={() => openSide("expense")}
-            title={
-              totals.expensePlanned ? `${money(totals.expensePlanned)} ainda a pagar` : undefined
-            }
-          >
-            <span className="text-muted-foreground">Saídas totais </span>
-            <span className="font-semibold tabular-nums">
-              {money(totals.expenseRealized + totals.expensePlanned)}
-            </span>
-          </button>
-          <span>
-            <span className="text-muted-foreground">Diferença </span>
-            <span
-              className={cn(
-                "font-semibold tabular-nums",
-                totals.surplus >= 0 ? "text-emerald-700 dark:text-emerald-400" : "text-destructive",
-              )}
-            >
-              {signedMoney(totals.surplus)}
-            </span>
-          </span>
+          />
+          <MiniStat
+            icon={<ScaleIcon />}
+            iconClass={totals.surplus >= 0 ? tone.income.soft : tone.expense.soft}
+            label="Diferença"
+            value={signedMoney(totals.surplus)}
+            valueClass={totals.surplus >= 0 ? tone.income.text : tone.expense.text}
+            sub={totals.surplus >= 0 ? "entrou mais do que saiu" : "saiu mais do que entrou"}
+          />
         </div>
 
         {shown.length > 0 && (
@@ -226,15 +235,18 @@ export default function VisaoGeralPage() {
                 />
                 Gastos por categoria
                 {!catsOpen && (
-                  <span className="font-normal text-muted-foreground tabular-nums">
+                  <span className={cn("font-normal tabular-nums", tone.expense.text)}>
                     · {money(totalOut)}
                   </span>
                 )}
               </button>
               {catsOpen && (
-                <span className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-                  <i className="h-2.5 w-0.5 rounded-sm bg-foreground/50" aria-hidden /> média de 3
-                  meses
+                <span className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <i className="h-2.5 w-0.5 rounded-sm bg-foreground/50" aria-hidden /> média de 3
+                    meses
+                  </span>
+                  {shareOf && <span>% = parte {shareLabel} do mês</span>}
                 </span>
               )}
               {catsOpen && named.length > 6 && (
@@ -266,9 +278,9 @@ export default function VisaoGeralPage() {
                           .getElementById("s-fluxo")
                           ?.scrollIntoView({ behavior: "smooth", block: "start" })
                       }}
-                      title={`${catName(c.categoryId)}: ${money(c.amount)} · ${Math.round((c.amount / Math.max(totalOut, 1)) * 100)}% das saídas${c.average !== null ? ` · média ${money(c.average)}` : ""}`}
+                      title={`${catName(c.categoryId)}: ${money(c.amount)} · ${Math.round((c.amount / Math.max(totalOut, 1)) * 100)}% das saídas${totalIn > 0 ? ` · ${shareOf!(c.amount)}% das entradas` : ""}${c.average !== null ? ` · média ${money(c.average)}` : ""}`}
                       className={cn(
-                        "grid w-full grid-cols-[minmax(0,170px)_minmax(0,1fr)_110px_150px] items-center gap-4 rounded-lg px-2 py-2 text-left text-sm hover:bg-muted max-md:grid-cols-[minmax(0,1fr)_auto] max-md:gap-1.5",
+                        "grid w-full grid-cols-[minmax(0,170px)_minmax(0,1fr)_56px_110px_150px] items-center gap-4 rounded-lg px-2 py-2 text-left text-sm transition-colors hover:bg-muted max-md:grid-cols-[minmax(0,1fr)_auto_auto] max-md:gap-x-3 max-md:gap-y-1.5",
                         filter === key && "bg-primary/10",
                       )}
                     >
@@ -280,9 +292,12 @@ export default function VisaoGeralPage() {
                       >
                         {catName(c.categoryId)}
                       </span>
-                      <span className="relative h-1.5 rounded-full bg-muted max-md:col-span-2 max-md:row-start-2">
+                      <span className="relative h-2 rounded-full bg-muted max-md:col-span-3 max-md:row-start-2">
                         <i
-                          className="block h-full rounded-full bg-[var(--viz-1)]"
+                          className={cn(
+                            "block h-full rounded-full",
+                            c.categoryId ? tone.expense.bar : "bg-amber-500",
+                          )}
                           style={{ width: `${Math.max((c.amount / scale) * 100, 1)}%` }}
                         />
                         {c.average !== null && c.average > 0 && (
@@ -292,10 +307,21 @@ export default function VisaoGeralPage() {
                           />
                         )}
                       </span>
-                      <span className="text-right font-semibold tabular-nums max-md:col-start-2 max-md:row-start-1">
+                      <span
+                        className="text-right text-xs font-semibold text-muted-foreground tabular-nums max-md:col-start-2 max-md:row-start-1"
+                        title={shareOf ? `${shareOf(c.amount)}% ${shareLabel} do mês` : undefined}
+                      >
+                        {shareOf ? `${shareOf(c.amount)}%` : ""}
+                      </span>
+                      <span
+                        className={cn(
+                          "text-right font-semibold tabular-nums max-md:col-start-3 max-md:row-start-1",
+                          tone.expense.text,
+                        )}
+                      >
                         {money(c.amount)}
                       </span>
-                      <span className="text-right text-xs text-muted-foreground max-md:col-span-2 max-md:text-left">
+                      <span className="text-right text-xs text-muted-foreground max-md:col-span-3 max-md:text-left">
                         {pct === null ? (
                           !c.categoryId ? (
                             <span className="font-semibold text-amber-700 dark:text-amber-400">
@@ -431,6 +457,52 @@ function Chip({
   )
 }
 
+/** Número pequeno do resumo: ícone colorido, rótulo, valor e uma linha de apoio. */
+function MiniStat({
+  icon,
+  iconClass,
+  label,
+  value,
+  valueClass,
+  sub,
+  onClick,
+}: {
+  icon: React.ReactNode
+  iconClass: string
+  label: string
+  value: string
+  valueClass: string
+  sub: string
+  onClick?: () => void
+}) {
+  const body = (
+    <>
+      <span
+        className={cn(
+          "flex size-8 shrink-0 items-center justify-center rounded-full [&_svg]:size-4",
+          iconClass,
+        )}
+        aria-hidden
+      >
+        {icon}
+      </span>
+      <span className="flex min-w-0 flex-col">
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className={cn("text-base font-semibold tabular-nums", valueClass)}>{value}</span>
+        <span className="truncate text-[11px] text-muted-foreground">{sub}</span>
+      </span>
+    </>
+  )
+  const className = "flex items-center gap-3 px-4 py-2.5 text-left"
+  return onClick ? (
+    <button className={cn(className, "transition-colors hover:bg-muted/50")} onClick={onClick}>
+      {body}
+    </button>
+  ) : (
+    <div className={className}>{body}</div>
+  )
+}
+
 /** Saldos de hoje das contas correntes (F83); as só de repasse aparecem zeradas. */
 function BalancesCard({
   balances,
@@ -444,9 +516,12 @@ function BalancesCard({
   return (
     <Link
       href="/financeiro/patrimonio"
-      className="flex flex-col gap-1.5 rounded-xl border bg-card px-4 py-3.5 hover:bg-muted/50"
+      className="flex flex-col gap-2 rounded-xl border bg-card px-4 py-3.5 transition-colors hover:bg-muted/50"
     >
-      <span className="text-xs text-muted-foreground">Saldos atuais · {dayMonth(today)}</span>
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        <WalletIcon className="size-4" aria-hidden />
+        Saldos atuais · {dayMonth(today)}
+      </span>
       {balances.length ? (
         <ul className="flex flex-col gap-1">
           {balances.map((b) => (
@@ -501,22 +576,33 @@ function MonthEndCard({
         ...cash.bills.map((b) => `− ${money(b.amount)} da fatura de ${dayMonth(b.dueDate)}`),
       ].filter(Boolean)
     : []
+  const positive = (cash?.projected ?? 0) >= 0
   return (
     <div
-      className="flex flex-col gap-0.5 rounded-xl border bg-primary/5 px-4 py-3.5"
+      className={cn(
+        "flex flex-col gap-0.5 rounded-xl border border-l-4 bg-card px-4 py-3.5",
+        cash && (positive ? "border-l-emerald-500" : "border-l-rose-500"),
+      )}
       title={
         closed
           ? "Saldo real da conta no último dia do mês"
           : "Saldo de hoje, mais o que está previsto na conta até o fim do mês (inclusive o vencido), mais o que entra nas contas só de repasse, menos as faturas do cartão que vencem até lá"
       }
     >
-      <span className="text-xs font-semibold text-primary">Balanço final</span>
+      <span className="flex items-center gap-2 text-xs font-semibold text-muted-foreground">
+        {positive ? (
+          <TrendingUpIcon className={cn("size-4", tone.income.text)} aria-hidden />
+        ) : (
+          <TrendingDownIcon className={cn("size-4", tone.expense.text)} aria-hidden />
+        )}
+        Balanço final
+      </span>
       {cash ? (
         <>
           <span
             className={cn(
               "text-2xl font-semibold tracking-tight tabular-nums",
-              cash.projected < 0 && "text-destructive",
+              positive ? tone.income.text : tone.expense.text,
             )}
           >
             {signedMoney(cash.projected)}

@@ -1,6 +1,6 @@
 "use client"
 
-import { MoreHorizontalIcon, PlusIcon } from "lucide-react"
+import { ArrowDownLeftIcon, ArrowUpRightIcon, MoreHorizontalIcon, PlusIcon } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { CategoryPicker } from "@/components/finance/category-picker"
@@ -26,6 +26,7 @@ import {
   shortMonth,
   type Tx,
   type TxPatch,
+  tone,
   useFinanceAction,
   useFinanceRefresh,
 } from "@/lib/finance"
@@ -434,7 +435,7 @@ function FlowRow({
             col="val"
             ariaLabel="Valor"
             inputMode="decimal"
-            className="text-right tabular-nums"
+            className={cn("text-right tabular-nums", tone[side].text)}
             value={plainMoney(tx.amount)}
             onCommit={(raw) => {
               const cents = parseMoney(raw)
@@ -459,7 +460,8 @@ function FlowRow({
             }
             className={cn(
               "block px-2 tabular-nums",
-              value < 0 && "text-emerald-700 dark:text-emerald-400",
+              // Estorno numa saída é dinheiro voltando: verde.
+              value < 0 ? tone.income.text : tone[side].text,
               (out || viaInvoice) && "text-muted-foreground",
             )}
           >
@@ -522,7 +524,13 @@ function BillRow({ bill, accounts }: { bill: Bill; accounts: FinAccount[] }) {
       <td className={cn(cell, "text-muted-foreground max-md:[grid-area:cat]")}>—</td>
       <td className={cn(cell, "truncate text-muted-foreground max-md:[grid-area:acc]")}>{card}</td>
       <td className={cn(cell, "max-md:[grid-area:type]")}>Variável</td>
-      <td className={cn(cell, "text-right tabular-nums max-md:[grid-area:val]")}>
+      <td
+        className={cn(
+          cell,
+          "text-right font-semibold tabular-nums max-md:[grid-area:val]",
+          tone.expense.text,
+        )}
+      >
         {plainMoney(bill.amount)}
       </td>
       <td className={cn(cell, "text-xs text-muted-foreground max-md:[grid-area:note]")}>
@@ -614,10 +622,26 @@ export function FlowTable({
   )
 
   return (
-    <div className="min-w-0 overflow-hidden rounded-xl border bg-card">
-      <div className="flex items-baseline gap-2 border-b px-3 py-2.5">
+    <div
+      className={cn(
+        "min-w-0 overflow-hidden rounded-xl border border-t-4 bg-card",
+        tone[side].border,
+      )}
+    >
+      <div className="flex items-center gap-2 border-b px-3 py-2.5">
+        <span
+          className={cn(
+            "flex size-7 items-center justify-center rounded-full [&_svg]:size-4",
+            tone[side].soft,
+          )}
+          aria-hidden
+        >
+          {side === "income" ? <ArrowDownLeftIcon /> : <ArrowUpRightIcon />}
+        </span>
         <h3 className="font-semibold">{label}</h3>
-        <span className="ml-auto font-semibold tabular-nums">{money(total)}</span>
+        <span className={cn("ml-auto text-lg font-semibold tabular-nums", tone[side].text)}>
+          {money(total)}
+        </span>
       </div>
       <div ref={scroller} className="max-h-[68vh] overflow-auto max-md:max-h-none">
         <table className="w-full min-w-[880px] table-fixed border-collapse text-sm max-md:block max-md:min-w-0">
@@ -697,7 +721,12 @@ export function FlowTable({
                   : ""}
                 fixos {money(fixed)} · variáveis {money(total - fixed)}
               </td>
-              <td className="px-2 py-2 text-right text-sm font-semibold tabular-nums">
+              <td
+                className={cn(
+                  "px-2 py-2 text-right text-sm font-semibold tabular-nums",
+                  tone[side].text,
+                )}
+              >
                 {money(total)}
               </td>
               <td className="max-md:hidden" />
@@ -746,10 +775,26 @@ export function MiniColumn({
   const label = side === "expense" ? "Saídas" : "Entradas"
   const last = rows.slice(-8).reverse()
   return (
-    <div className="flex min-w-0 flex-col rounded-xl border bg-muted/30">
-      <button className="flex items-baseline gap-2 px-3 pt-2.5 text-left" onClick={() => onOpen()}>
+    <div
+      className={cn(
+        "flex min-w-0 flex-col rounded-xl border border-t-4 bg-muted/30",
+        tone[side].border,
+      )}
+    >
+      <button className="flex items-center gap-2 px-3 pt-2.5 text-left" onClick={() => onOpen()}>
+        <span
+          className={cn(
+            "flex size-6 items-center justify-center rounded-full [&_svg]:size-3.5",
+            tone[side].soft,
+          )}
+          aria-hidden
+        >
+          {side === "income" ? <ArrowDownLeftIcon /> : <ArrowUpRightIcon />}
+        </span>
         <h3 className="font-semibold">{label}</h3>
-        <span className="ml-auto font-semibold tabular-nums">{money(total)}</span>
+        <span className={cn("ml-auto font-semibold tabular-nums", tone[side].text)}>
+          {money(total)}
+        </span>
       </button>
       <p className="border-b px-3 pb-2 text-xs text-muted-foreground">
         {counted.length} lançamentos{nPlanned ? ` · ${nPlanned} previstos` : ""}
@@ -767,7 +812,7 @@ export function MiniColumn({
             >
               <span className="text-muted-foreground tabular-nums">{dayMonth(b.dueDate)}</span>
               <span className="truncate">Fatura do cartão</span>
-              <span className="tabular-nums">{plainMoney(b.amount)}</span>
+              <span className={cn("tabular-nums", tone.expense.text)}>{plainMoney(b.amount)}</span>
             </button>
           </li>
         ))}
@@ -785,7 +830,9 @@ export function MiniColumn({
                 {dayMonth(t.flag === "deferred_out" ? t.deferredFrom! : t.date)}
               </span>
               <span className="truncate">{t.description}</span>
-              <span className="tabular-nums">{plainMoney(sign * t.amount)}</span>
+              <span className={cn("tabular-nums", !notCounted(t) && tone[side].text)}>
+                {plainMoney(sign * t.amount)}
+              </span>
             </button>
           </li>
         ))}
