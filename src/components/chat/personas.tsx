@@ -15,6 +15,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -75,16 +76,18 @@ export function PersonaPicker({
           <TooltipContent>Quem responde (persona)</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="start" className="w-72">
-          <DropdownMenuLabel>Persona</DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>Persona</DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuRadioGroup
             value={current?.id ?? DEFAULT}
             onValueChange={(next: string) => onChange(next === DEFAULT ? null : next)}
           >
-            <DropdownMenuRadioItem value={DEFAULT}>
+            <DropdownMenuRadioItem value={DEFAULT} closeOnClick>
               <PersonaLabel name="Padrão" description="Sem prompt específico" />
             </DropdownMenuRadioItem>
             {(personas.data ?? []).map((persona) => (
-              <DropdownMenuRadioItem key={persona.id} value={persona.id}>
+              <DropdownMenuRadioItem key={persona.id} value={persona.id} closeOnClick>
                 <PersonaLabel
                   emoji={persona.emoji}
                   name={persona.name}

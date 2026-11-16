@@ -22,6 +22,7 @@ import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
@@ -512,13 +513,15 @@ export const Composer = forwardRef<
             </span>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Raciocínio</DropdownMenuLabel>
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>Raciocínio</DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuRadioGroup
               value={options.reasoningEffort}
               onValueChange={(reasoningEffort) => onOptionsChange({ reasoningEffort })}
             >
               {efforts.map(([value, label]) => (
-                <DropdownMenuRadioItem key={value} value={value}>
+                <DropdownMenuRadioItem key={value} value={value} closeOnClick>
                   {label}
                 </DropdownMenuRadioItem>
               ))}
