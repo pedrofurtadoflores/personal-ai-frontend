@@ -131,6 +131,7 @@ test("todas as telas abrem sem erro nem violação de CSP", async ({ page }) => 
     ["/sinapses", "Sinapses"],
     ["/sinapses/sugestoes", "Sugestões de memória"],
     ["/sinapses/grafo", "Grafo de sinapses"],
+    ["/diario", "Diário"],
     ["/arquivos", "Arquivos"],
     ["/uso", "Uso e custos"],
     ["/configuracoes", "Configurações"],
@@ -241,4 +242,14 @@ test("rascunho fica salvo ao recarregar a página", async ({ page }) => {
   await page.getByLabel("Mensagem").fill("Texto pela metade")
   await page.reload()
   await expect(page.getByLabel("Mensagem")).toHaveValue("Texto pela metade")
+})
+
+test("clicar no título Personal AI volta para o início", async ({ page }) => {
+  await mockApi(page)
+  await loginAs(page)
+  await page.goto("/configuracoes")
+  await expect(page).toHaveURL(/\/configuracoes$/)
+  await page.getByRole("link", { name: /Personal AI/ }).click()
+  await expect(page).toHaveURL(/\/$/)
+  await expect(page.getByText("Como posso ajudar?")).toBeVisible()
 })

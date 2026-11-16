@@ -3,6 +3,7 @@
 import {
   ArchiveIcon,
   BarChart3Icon,
+  BookHeartIcon,
   BrainCircuitIcon,
   FolderIcon,
   LogOutIcon,
@@ -26,6 +27,7 @@ import { cn } from "@/lib/utils"
 
 const navItems = [
   { href: "/sinapses", label: "Sinapses", icon: BrainCircuitIcon },
+  { href: "/diario", label: "Diário", icon: BookHeartIcon },
   { href: "/arquivos", label: "Arquivos", icon: FolderIcon },
   { href: "/financeiro", label: "Financeiro", icon: WalletIcon },
   { href: "/uso", label: "Uso e custos", icon: BarChart3Icon },
@@ -51,10 +53,15 @@ export function AppSidebar({
 
   return (
     <div className="flex h-full flex-col bg-sidebar text-sidebar-foreground">
-      <div className="flex items-center gap-2 p-3">
+      <Link
+        href="/"
+        onClick={onNavigate}
+        aria-label="Personal AI: ir para o início"
+        className="flex items-center gap-2 p-3 outline-none hover:opacity-80 focus-visible:ring-2 focus-visible:ring-ring"
+      >
         <BrainCircuitIcon className="size-5 text-primary" />
         <span className="font-semibold">Personal AI</span>
-      </div>
+      </Link>
 
       <div className="flex flex-col gap-1 px-3">
         <Button

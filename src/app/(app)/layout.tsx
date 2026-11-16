@@ -121,7 +121,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               />
             </SheetContent>
           </Sheet>
-          <span className="font-semibold">Personal AI</span>
+          <Link href="/" className="font-semibold hover:opacity-80">
+            Personal AI
+          </Link>
         </header>
 
         <UsageBanner />

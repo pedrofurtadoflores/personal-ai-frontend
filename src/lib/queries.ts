@@ -1,9 +1,9 @@
 "use client"
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { api, unwrap } from "@/lib/api"
 import type { paths } from "@/lib/api-schema"
-import type { Settings } from "@/lib/types"
+import type { DiaryDayView, Settings } from "@/lib/types"
 
 // ─── Conversas ────────────────────────────────────────────────────────────────
 
@@ -45,6 +45,78 @@ export function useUpdateConversation() {
       void queryClient.invalidateQueries({ queryKey: ["conversation", conversation.id] })
     },
   })
+}
+
+// ─── Diário (D81) ─────────────────────────────────────────────────────────────
+
+/** Dias com registro de um mês (sem `month`, o mês atual) e a data de hoje (virada às 4h). */
+export function useDiaryMonth(month?: string) {
+  return useQuery({
+    queryKey: ["diary-month", month ?? "current"],
+    queryFn: () => unwrap(api.GET("/diary/days", { params: { query: month ? { month } : {} } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useDiaryDay(date: string) {
+  return useQuery({
+    queryKey: ["diary-day", date],
+    queryFn: () => unwrap(api.GET("/diary/days/{date}", { params: { path: { date } } })),
+  })
+}
+
+/** Ações do dia: cada uma atualiza a tela e o calendário. */
+export function useDiaryActions(date: string) {
+  const queryClient = useQueryClient()
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["diary-day", date] })
+    void queryClient.invalidateQueries({ queryKey: ["diary-month"] })
+  }
+  const show = (view: DiaryDayView) => {
+    queryClient.setQueryData(["diary-day", date], view)
+    void queryClient.invalidateQueries({ queryKey: ["diary-month"] })
+  }
+  return {
+    start: useMutation({
+      mutationFn: (text: string) =>
+        unwrap(
+          api.POST("/diary/days/{date}/entries", { params: { path: { date } }, body: { text } }),
+        ),
+      onSettled: refresh,
+    }),
+    answer: useMutation({
+      mutationFn: ({ entryId, text, skip }: { entryId: string; text?: string; skip?: boolean }) =>
+        unwrap(
+          api.POST("/diary/entries/{id}/turns", {
+            params: { path: { id: entryId } },
+            body: { ...(text ? { text } : {}), ...(skip ? { skip } : {}) },
+          }),
+        ),
+      onSettled: refresh,
+    }),
+    conclude: useMutation({
+      mutationFn: ({ entryId, mood }: { entryId: string; mood?: number | null }) =>
+        unwrap(
+          api.POST("/diary/entries/{id}/conclude", {
+            params: { path: { id: entryId } },
+            body: mood === undefined ? {} : { mood },
+          }),
+        ),
+      onSuccess: show,
+      onError: refresh,
+    }),
+    remove: useMutation({
+      mutationFn: (entryId: string) =>
+        unwrap(api.DELETE("/diary/entries/{id}", { params: { path: { id: entryId } } })),
+      onSuccess: show,
+      onError: refresh,
+    }),
+    patch: useMutation({
+      mutationFn: (body: { mood?: number | null; summary?: string; learnings?: string[] }) =>
+        unwrap(api.PATCH("/diary/days/{date}", { params: { path: { date } }, body })),
+      onSuccess: show,
+    }),
+  }
 }
 
 // ─── Personas (D80) ───────────────────────────────────────────────────────────

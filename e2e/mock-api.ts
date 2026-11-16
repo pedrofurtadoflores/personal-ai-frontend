@@ -130,6 +130,65 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     { conversation: Record<string, unknown>; messages: MessageRow[] }
   >()
 
+  // Diário (D81): estado em memória, com a mesma forma da API real.
+  type DiaryTurnRow = { id: string; role: "user" | "assistant"; text: string; createdAt: string }
+  type DiaryEntryRow = {
+    id: string
+    date: string
+    kind: "live" | "retro"
+    status: "open" | "concluded"
+    createdAt: string
+    concludedAt: string | null
+    turns: DiaryTurnRow[]
+  }
+  type DiaryDayRow = {
+    mood: number | null
+    summary: string
+    learnings: string[]
+    summaryEdited: boolean
+    condensedAt: string | null
+  }
+  const diaryEntries: DiaryEntryRow[] = []
+  const diaryDays = new Map<string, DiaryDayRow>()
+  let diaryCounter = 1
+  const diaryToday = new Date(Date.now() - 4 * 3_600_000).toLocaleDateString("en-CA", {
+    timeZone: "America/Sao_Paulo",
+  })
+  const diaryDay = (date: string): DiaryDayRow =>
+    diaryDays.get(date) ?? {
+      mood: null,
+      summary: "",
+      learnings: [],
+      summaryEdited: false,
+      condensedAt: null,
+    }
+  const diaryView = (date: string) => ({
+    opening: date === diaryToday ? "Como está sendo seu dia?" : "Como foi seu dia?",
+    day: { date, ...diaryDay(date) },
+    entries: diaryEntries.filter((entry) => entry.date === date),
+  })
+  const diaryTurn = (role: "user" | "assistant", text: string): DiaryTurnRow => ({
+    id: uuid(7_000 + diaryCounter++),
+    role,
+    text,
+    createdAt: now(),
+  })
+  const diaryQuestion = () =>
+    diaryTurn("assistant", `Pergunta ${diaryCounter}: como você se sentiu?`)
+  const condense = (date: string) => {
+    const done = diaryEntries.filter((entry) => entry.date === date && entry.status === "concluded")
+    const day = diaryDay(date)
+    diaryDays.set(date, {
+      ...day,
+      summary: done.length
+        ? `Resumo do dia: ${done.flatMap((e) => e.turns.filter((t) => t.role === "user").map((t) => t.text)).join(" / ")}`
+        : "",
+      learnings: done.length ? ["Aprendi a registrar o dia."] : [],
+      summaryEdited: false,
+      condensedAt: done.length ? now() : null,
+    })
+  }
+
   await page.route(`${E2E_API_URL}/**`, async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -195,6 +254,85 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === "/files") return json({ files: [] })
     if (path === "/images") return json({ images: [] })
     if (path === "/backups") return json({ backups: [] })
+
+    if (path.startsWith("/diary/")) {
+      const body = (request.postDataJSON() ?? {}) as Record<string, unknown>
+      if (path === "/diary/days" && method === "GET") {
+        const month = url.searchParams.get("month") ?? diaryToday.slice(0, 7)
+        const dates = new Set([...diaryDays.keys(), ...diaryEntries.map((entry) => entry.date)])
+        const days = [...dates]
+          .filter((date) => date.startsWith(month))
+          .map((date) => {
+            const own = diaryEntries.filter((entry) => entry.date === date)
+            return {
+              date,
+              mood: diaryDay(date).mood,
+              summary: diaryDay(date).summary,
+              learnings: diaryDay(date).learnings,
+              entryCount: own.length,
+              openCount: own.filter((entry) => entry.status === "open").length,
+            }
+          })
+          .filter((day) => day.entryCount > 0 || day.mood !== null)
+          .sort((a, b) => b.date.localeCompare(a.date))
+        return json({ today: diaryToday, month, days })
+      }
+      const dayMatch = path.match(/^\/diary\/days\/(\d{4}-\d{2}-\d{2})(\/entries)?$/)
+      if (dayMatch) {
+        const date = dayMatch[1]!
+        if (date > diaryToday) return json({ error: "future_date" }, 400)
+        if (dayMatch[2] && method === "POST") {
+          const entry: DiaryEntryRow = {
+            id: uuid(6_000 + diaryCounter++),
+            date,
+            kind: date === diaryToday ? "live" : "retro",
+            status: "open",
+            createdAt: now(),
+            concludedAt: null,
+            turns: [diaryTurn("user", String(body.text)), diaryQuestion()],
+          }
+          diaryEntries.push(entry)
+          return json(entry, 201)
+        }
+        if (method === "PATCH") {
+          const day = diaryDay(date)
+          diaryDays.set(date, {
+            ...day,
+            ...(body.mood !== undefined ? { mood: body.mood as number | null } : {}),
+            ...(body.summary !== undefined
+              ? { summary: String(body.summary), summaryEdited: true }
+              : {}),
+            ...(body.learnings !== undefined ? { learnings: body.learnings as string[] } : {}),
+          })
+          return json(diaryView(date))
+        }
+        return json(diaryView(date))
+      }
+      const entryMatch = path.match(/^\/diary\/entries\/([^/]+)(\/turns|\/conclude)?$/)
+      const entry = entryMatch && diaryEntries.find((item) => item.id === entryMatch[1])
+      if (entryMatch && entry) {
+        if (entryMatch[2] === "/turns") {
+          if (body.text) entry.turns.push(diaryTurn("user", String(body.text)))
+          entry.turns.push(diaryQuestion())
+          return json(entry)
+        }
+        if (entryMatch[2] === "/conclude") {
+          entry.status = "concluded"
+          entry.concludedAt = now()
+          if (body.mood !== undefined) {
+            diaryDays.set(entry.date, { ...diaryDay(entry.date), mood: body.mood as number | null })
+          }
+          condense(entry.date)
+          return json(diaryView(entry.date))
+        }
+        if (method === "DELETE") {
+          diaryEntries.splice(diaryEntries.indexOf(entry), 1)
+          condense(entry.date)
+          return json(diaryView(entry.date))
+        }
+      }
+      return json({ error: "not_found" }, 404)
+    }
 
     // Financeiro: uma conta, uma categoria e um lançamento, o suficiente para as telas abrirem.
     if (path.startsWith("/finance/")) {
