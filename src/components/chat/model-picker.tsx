@@ -28,7 +28,8 @@ export function costTier(model: Pick<Model, "outputPrice">) {
   return { label: "$$$$", title: "Muito caro" }
 }
 
-export const FEATURED = ["gpt-6-sol", "gpt-6-luna", "gpt-6-astra", "gpt-6.1-sol", "gpt-5.6-terra"]
+/** Os poucos modelos sempre visíveis; o resto fica em "Mais modelos". */
+export const FEATURED = ["gpt-6-sol", "gpt-6-luna", "gpt-6-astra"]
 
 function PriceLine({ model }: { model: Model }) {
   if (model.inputPrice == null) return <span>Preço desconhecido</span>
@@ -49,6 +50,8 @@ export function ModelPicker({
   className?: string
 }) {
   const [open, setOpen] = useState(false)
+  const [showMore, setShowMore] = useState(false)
+  const [query, setQuery] = useState("")
   const models = useModels("chat")
   const list = models.data?.models ?? []
   const current = list.find((model) => model.id === value)
@@ -56,6 +59,10 @@ export function ModelPicker({
     (model) => model !== undefined,
   )
   const others = list.filter((model) => !FEATURED.includes(model.id))
+  // Buscando, procura em todos; o modelo atual sempre aparece, mesmo fora dos recomendados.
+  const searching = query.trim().length > 0
+  const expanded = showMore || searching
+  const hiddenCurrent = !expanded && current && !FEATURED.includes(current.id) ? [current] : []
 
   const item = (model: Model) => {
     const tier = costTier(model)
@@ -92,7 +99,16 @@ export function ModelPicker({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next)
+        if (!next) {
+          setQuery("")
+          setShowMore(false)
+        }
+      }}
+    >
       <Tooltip>
         <TooltipTrigger
           render={
@@ -118,13 +134,30 @@ export function ModelPicker({
       </Tooltip>
       <PopoverContent className="w-96 p-0" align="start">
         <Command>
-          <CommandInput placeholder="Buscar modelo…" />
+          <CommandInput placeholder="Buscar modelo…" value={query} onValueChange={setQuery} />
           <CommandList className="max-h-96">
             <CommandEmpty>Nenhum modelo encontrado.</CommandEmpty>
             {featured.length > 0 && (
               <CommandGroup heading="Recomendados">{featured.map(item)}</CommandGroup>
             )}
-            <CommandGroup heading="Todos">{others.map(item)}</CommandGroup>
+            {hiddenCurrent.length > 0 && (
+              <CommandGroup heading="Atual">{hiddenCurrent.map(item)}</CommandGroup>
+            )}
+            {expanded && others.length > 0 && (
+              <CommandGroup heading="Mais modelos">{others.map(item)}</CommandGroup>
+            )}
+            {!expanded && others.length > 0 && (
+              <div className="p-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="w-full justify-center gap-1 text-muted-foreground"
+                  onClick={() => setShowMore(true)}
+                >
+                  <ChevronDownIcon className="size-3.5" /> Mais modelos ({others.length})
+                </Button>
+              </div>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

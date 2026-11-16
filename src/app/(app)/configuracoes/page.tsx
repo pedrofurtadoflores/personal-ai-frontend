@@ -4,6 +4,7 @@ import { useMutation } from "@tanstack/react-query"
 import {
   DatabaseBackupIcon,
   DownloadIcon,
+  DramaIcon,
   HardDriveIcon,
   Loader2Icon,
   MonitorSmartphoneIcon,
@@ -15,6 +16,7 @@ import {
 import { useState } from "react"
 import { toast } from "sonner"
 import { ModelPicker } from "@/components/chat/model-picker"
+import { PersonaManager } from "@/components/chat/personas"
 import { NativeSelect } from "@/components/ui-extra/native-select"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -538,6 +540,21 @@ export default function ConfiguracoesPage() {
               onSave={(value) => save({ contextBudgetTokens: Number(value) })}
             />
           </Field>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <DramaIcon className="size-4" /> Personas
+          </CardTitle>
+          <CardDescription>
+            Prompts que definem quem responde. Escolha no chat, ao lado do modelo; vale para as
+            próximas respostas da conversa.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PersonaManager />
         </CardContent>
       </Card>
 

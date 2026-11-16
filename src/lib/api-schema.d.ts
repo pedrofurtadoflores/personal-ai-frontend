@@ -1390,6 +1390,7 @@ export interface paths {
                                 id: string;
                                 title: string | null;
                                 folderId: string | null;
+                                personaId: string | null;
                                 model: string | null;
                                 systemPrompt: string | null;
                                 settings: {
@@ -1481,6 +1482,8 @@ export interface paths {
                         anonymous?: boolean;
                         /** Format: uuid */
                         folderId?: string | null;
+                        /** Format: uuid */
+                        personaId?: string | null;
                         settings?: {
                             reasoningEffort?: string;
                             webSearch?: boolean;
@@ -1502,6 +1505,7 @@ export interface paths {
                             id: string;
                             title: string | null;
                             folderId: string | null;
+                            personaId: string | null;
                             model: string | null;
                             systemPrompt: string | null;
                             settings: {
@@ -1610,6 +1614,7 @@ export interface paths {
                                 id: string;
                                 title: string | null;
                                 folderId: string | null;
+                                personaId: string | null;
                                 model: string | null;
                                 systemPrompt: string | null;
                                 settings: {
@@ -1696,6 +1701,11 @@ export interface paths {
                                 })[];
                                 contentText: string | null;
                                 model: string | null;
+                                persona: {
+                                    id: string;
+                                    name: string;
+                                    emoji: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 status: "streaming" | "completed" | "stopped" | "error" | "incomplete";
                                 error: string | null;
@@ -1870,6 +1880,8 @@ export interface paths {
                         archived?: boolean;
                         /** Format: uuid */
                         folderId?: string | null;
+                        /** Format: uuid */
+                        personaId?: string | null;
                         settings?: {
                             reasoningEffort?: string;
                             webSearch?: boolean;
@@ -1891,6 +1903,7 @@ export interface paths {
                             id: string;
                             title: string | null;
                             folderId: string | null;
+                            personaId: string | null;
                             model: string | null;
                             systemPrompt: string | null;
                             settings: {
@@ -2102,6 +2115,7 @@ export interface paths {
                             id: string;
                             title: string | null;
                             folderId: string | null;
+                            personaId: string | null;
                             model: string | null;
                             systemPrompt: string | null;
                             settings: {
@@ -2211,6 +2225,7 @@ export interface paths {
                             id: string;
                             title: string | null;
                             folderId: string | null;
+                            personaId: string | null;
                             model: string | null;
                             systemPrompt: string | null;
                             settings: {
@@ -2772,6 +2787,8 @@ export interface paths {
                         codeInterpreter?: boolean;
                         temperature?: number | null;
                         /** Format: uuid */
+                        personaId?: string | null;
+                        /** Format: uuid */
                         parentId: string | null;
                         /** @default  */
                         text?: string;
@@ -2884,6 +2901,8 @@ export interface paths {
                         imageGeneration?: boolean;
                         codeInterpreter?: boolean;
                         temperature?: number | null;
+                        /** Format: uuid */
+                        personaId?: string | null;
                     };
                 };
             };
@@ -2989,6 +3008,8 @@ export interface paths {
                         imageGeneration?: boolean;
                         codeInterpreter?: boolean;
                         temperature?: number | null;
+                        /** Format: uuid */
+                        personaId?: string | null;
                     };
                 };
             };
@@ -3361,6 +3382,11 @@ export interface paths {
                             })[];
                             contentText: string | null;
                             model: string | null;
+                            persona: {
+                                id: string;
+                                name: string;
+                                emoji: string | null;
+                            } | null;
                             /** @enum {string} */
                             status: "streaming" | "completed" | "stopped" | "error" | "incomplete";
                             error: string | null;
@@ -3530,6 +3556,372 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/personas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listar personas (D80). Sem persona = padrão. */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            personas: {
+                                id: string;
+                                name: string;
+                                emoji: string | null;
+                                description: string;
+                                instructions: string;
+                                position: number;
+                            }[];
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Criar persona */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name: string;
+                        emoji?: string | null;
+                        description?: string;
+                        instructions: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            emoji: string | null;
+                            description: string;
+                            instructions: string;
+                            position: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/personas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Apagar persona (as conversas dela voltam ao padrão; as respostas antigas mantêm o nome) */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Default Response */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": null;
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        /** Editar persona (vale para as próximas respostas) */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": {
+                        name?: string;
+                        emoji?: string | null;
+                        description?: string;
+                        instructions?: string;
+                        position?: number;
+                    };
+                };
+            };
+            responses: {
+                /** @description Default Response */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            id: string;
+                            name: string;
+                            emoji: string | null;
+                            description: string;
+                            instructions: string;
+                            position: number;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+                /** @description Default Response */
+                500: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            error: string;
+                            message?: string;
+                            details?: unknown;
+                        };
+                    };
+                };
+            };
+        };
         trace?: never;
     };
     "/files": {
@@ -6283,6 +6675,11 @@ export interface paths {
                                 })[];
                                 contentText: string | null;
                                 model: string | null;
+                                persona: {
+                                    id: string;
+                                    name: string;
+                                    emoji: string | null;
+                                } | null;
                                 /** @enum {string} */
                                 status: "streaming" | "completed" | "stopped" | "error" | "incomplete";
                                 error: string | null;

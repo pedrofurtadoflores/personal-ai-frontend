@@ -96,6 +96,7 @@ function message(
     rating: null,
     feedbackNote: null,
     contextTokens: null,
+    persona: null,
     createdAt: now(),
     completedAt: now(),
     ...partial,
@@ -162,6 +163,19 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
     if (path === "/settings") return json({ settings, voices: ["alloy", "marin"] })
     if (path === "/models") return json({ models, pricesSource: "teste" })
     if (path === "/folders") return json({ folders: [] })
+    if (path === "/personas")
+      return json({
+        personas: [
+          {
+            id: uuid(900),
+            name: "Filosófica",
+            emoji: "🦉",
+            description: "Responde com perguntas",
+            instructions: "Só perguntas.",
+            position: 0,
+          },
+        ],
+      })
     if (path === "/chat/suggestions")
       return json({
         suggestions: ["Retomar a receita de pão", "Planejar a semana de treinos"],
@@ -330,6 +344,7 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
         id,
         title: null,
         folderId: null,
+        personaId: (body.personaId as string | null | undefined) ?? null,
         model: body.model ?? null,
         systemPrompt: null,
         settings: body.settings ?? {},
@@ -397,6 +412,7 @@ export async function mockApi(page: Page, options: MockOptions = {}) {
           model: "gpt-6-sol",
           costUsd: 0.0012,
           contextTokens: 1_200,
+          persona: null,
         }
         if (user) data.messages.push(user)
         data.messages.push(done)

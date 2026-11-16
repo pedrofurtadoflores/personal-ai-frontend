@@ -562,6 +562,12 @@ function AssistantMessage({
 
   return (
     <div className="group/message flex flex-col gap-2">
+      {message.persona && (
+        <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+          <span aria-hidden>{message.persona.emoji ?? "🎭"}</span>
+          {message.persona.name}
+        </div>
+      )}
       {compacted && <CompactedNote part={compacted} />}
       {context && <ContextUsed part={context} />}
       {tools.length > 0 && <ToolUses parts={tools} />}

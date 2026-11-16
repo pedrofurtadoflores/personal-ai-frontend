@@ -42,6 +42,7 @@ import {
   useConversation,
   useFolders,
   useModels,
+  usePersonas,
   useSettings,
   useUpdateConversation,
 } from "@/lib/queries"
@@ -126,6 +127,7 @@ export function ChatView({
   const settings = useSettings()
   const models = useModels("chat")
   const folders = useFolders()
+  const personas = usePersonas()
   const suggestions = useChatSuggestions()
   const conversation = useConversation(conversationId)
   const updateConversation = useUpdateConversation()
@@ -158,7 +160,16 @@ export function ChatView({
   const project = (folders.data ?? []).find((folder) => folder.id === projectId)
 
   const convSettings = (data?.conversation.settings ?? {}) as Partial<ComposerOptions>
+  // D80: `null` é uma escolha (padrão), então "não escolhido" é a ausência da chave.
+  const chosenPersona =
+    "personaId" in draftOptions
+      ? (draftOptions.personaId ?? null)
+      : (data?.conversation.personaId ?? null)
+  // Persona apagada enquanto escolhida: volta ao padrão (o servidor recusaria o id).
+  const personaGone =
+    !!chosenPersona && !!personas.data && !personas.data.some((p) => p.id === chosenPersona)
   const options: ComposerOptions = {
+    personaId: personaGone ? null : chosenPersona,
     model:
       draftOptions.model ??
       data?.conversation.model ??
@@ -179,15 +190,17 @@ export function ChatView({
     webSearch: options.webSearch,
     imageGeneration: options.imageGeneration,
     codeInterpreter: options.codeInterpreter,
+    personaId: options.personaId,
   }
 
   function changeOptions(patch: Partial<ComposerOptions>) {
     setDraftOptions((current) => ({ ...current, ...patch }))
     if (!conversationId) return
-    const { model, ...rest } = patch
+    const { model, personaId, ...rest } = patch
     updateConversation.mutate({
       id: conversationId,
       ...(model ? { model } : {}),
+      ...(personaId !== undefined ? { personaId } : {}),
       ...(Object.keys(rest).length ? { settings: rest } : {}),
     })
   }
@@ -232,6 +245,7 @@ export function ChatView({
             api.POST("/conversations", {
               body: {
                 model: options.model,
+                personaId: options.personaId,
                 anonymous,
                 ...(folderId ? { folderId } : {}),
                 settings: {
@@ -285,6 +299,7 @@ export function ChatView({
       options.codeInterpreter,
       options.imageGeneration,
       options.model,
+      options.personaId,
       options.reasoningEffort,
       options.webSearch,
       queryClient,

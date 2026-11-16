@@ -47,6 +47,44 @@ export function useUpdateConversation() {
   })
 }
 
+// ─── Personas (D80) ───────────────────────────────────────────────────────────
+
+export function usePersonas() {
+  return useQuery({
+    queryKey: ["personas"],
+    queryFn: () => unwrap(api.GET("/personas")),
+    select: (data) => data.personas,
+    staleTime: 5 * 60_000,
+  })
+}
+
+type PersonaInput = NonNullable<
+  paths["/personas"]["post"]["requestBody"]
+>["content"]["application/json"]
+
+export function useSavePersona() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id?: string } & PersonaInput) =>
+      id
+        ? unwrap(api.PATCH("/personas/{id}", { params: { path: { id } }, body }))
+        : unwrap(api.POST("/personas", { body })),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ["personas"] }),
+  })
+}
+
+export function useDeletePersona() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => unwrap(api.DELETE("/personas/{id}", { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ["personas"] })
+      // Conversas com essa persona voltaram ao padrão no servidor.
+      void queryClient.invalidateQueries({ queryKey: ["conversation"] })
+    },
+  })
+}
+
 /** Sugestões da tela inicial, a partir da memória (D72). */
 export function useChatSuggestions() {
   return useQuery({

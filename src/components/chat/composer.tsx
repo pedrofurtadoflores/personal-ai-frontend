@@ -17,6 +17,7 @@ import {
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react"
 import { toast } from "sonner"
 import { ModelPicker } from "@/components/chat/model-picker"
+import { PersonaPicker } from "@/components/chat/personas"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -41,6 +42,8 @@ export type ComposerOptions = {
   webSearch: boolean
   imageGeneration: boolean
   codeInterpreter: boolean
+  /** D80: `null` = persona padrão. */
+  personaId: string | null
 }
 
 export type Mention = { id: string; title: string }
@@ -522,6 +525,11 @@ export const Composer = forwardRef<
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <PersonaPicker
+          value={options.personaId}
+          onChange={(personaId) => onOptionsChange({ personaId })}
+        />
 
         <ModelPicker value={options.model} onChange={(model) => onOptionsChange({ model })} />
 

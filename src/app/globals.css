@@ -130,5 +130,16 @@
   }
   html {
     @apply font-sans;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  /* A lista aberta de um <select> nativo não herda o fundo transparente do campo: sem isso,
+     o texto claro do tema escuro cai sobre o fundo branco do sistema. */
+  select option,
+  select optgroup {
+    background-color: var(--popover);
+    color: var(--popover-foreground);
   }
 }
